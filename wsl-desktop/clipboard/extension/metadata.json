@@ -1,0 +1,7 @@
+{
+  "uuid": "clipbridge@wsl-desktop",
+  "name": "WSL Desktop Clipboard Bridge",
+  "description": "Syncs the nested GNOME clipboard with the Windows clipboard through files. Runs inside gnome-shell so no helper window is created (no dock icon, no focus stealing).",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}

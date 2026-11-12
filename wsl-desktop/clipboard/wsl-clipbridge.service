@@ -1,0 +1,15 @@
+[Unit]
+Description=WSL 剪贴板桥（内层 GNOME Wayland ⇄ Windows，文本双向）
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/usr/local/bin/clipbridge
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
