@@ -1,4 +1,4 @@
-# WSL2 嵌套 GNOME 桌面（Ubuntu 26.04 / WSLg）完整技术报告
+# WSL2 嵌套 GNOME 桌面（Ubuntu / Fedora / Kali / Oracle Linux）完整技术报告
 
 > 开源分享版（公开仓库）
 > 报告生成：2026-11-12 02:00 前后（CST）

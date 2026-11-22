@@ -296,6 +296,7 @@ bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audi
 | 应用窗口归属（devkit 模式：Ubuntu/Fedora/Kali） | ✅ 启动的应用留在桌面窗口内（嵌套 Wayland；纯 X11 应用除外） |
 | 应用窗口归属（nested 模式：Oracle Linux 10） | ✅ 实测应用留在 `gnome-shell` 桌面窗口内 |
 | Fedora 45（GNOME 51.1 + mutter-devkit 51.1） | ✅ 桌面 / 声音 / 剪贴板双向实测通过 |
+| Kali 2026.3（GNOME 50.5 + mutter-dev-bin） | ✅ 桌面 / 声音 / 剪贴板双向实测通过（`KALI-LIN-000500` / `KALI-WIN-000500`） |
 | Oracle Linux 10.3（GNOME 47.8，nested） | ✅ 桌面 / 声音实测通过；剪贴板扩展 ACTIVE |
 | 声音输出 / 输入 | ✅ `RDPSink` / `RDPSource` |
 | 启动时自动修复音频卡死 | ✅ 实测约 3 秒恢复（17:03 桌面重启、17:11 手工 kill 各一次） |
