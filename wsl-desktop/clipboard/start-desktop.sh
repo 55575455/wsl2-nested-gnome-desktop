@@ -32,19 +32,21 @@
 set -uo pipefail
 
 UNIT=wsl-desktop-session
-TARGETS=('gnome-session@ubuntu.target' 'gnome-session-manager.target' 'gnome-session-basic-services.target' 'gnome-session-services.target')
+TARGETS=('gnome-session.target' 'gnome-session-manager.target' 'gnome-session-basic-services.target' 'gnome-session-services.target' 'gnome-session@ubuntu.target' 'gnome-session@gnome.target' 'gnome-session@user.target')
 SHARE=${WSL_DESKTOP_CLIP_DIR:-/mnt/c/Users/Public/wsl-desktop-clip}
 AGENT_SRC=/usr/local/lib/wsl-desktop/clip-agent.ps1
 PS_EXE=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
 WSL_EXE=/mnt/c/Windows/System32/wsl.exe
 MUTTER_DEVKIT=/usr/libexec/mutter-devkit
+SHELL_BIN=$(command -v gnome-shell 2>/dev/null || echo /usr/bin/gnome-shell)
 SHELL_OVERRIDE=/etc/systemd/user/org.gnome.Shell@.service.d/override.conf
 WRAPPER_TMP=/tmp/wsl-desktop-mutter-devkit
 OVERRIDE_TMP=/tmp/wsl-desktop-shell-override.conf
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
 export PULSE_SERVER="${PULSE_SERVER:-unix:/mnt/wslg/PulseServer}"
-export WSL_DISTRO_NAME="${WSL_DISTRO_NAME:-Ubuntu}"
+export WSL_DISTRO_NAME="${WSL_DISTRO_NAME:-$(. /etc/os-release 2>/dev/null; echo "${NAME:-Linux}")}"
+DISTRO_NAME="$WSL_DISTRO_NAME"
 # 用 systemd-run 启动时环境里可能没有 WSL_INTEROP，这里补上，Windows 互操作才可用
 if [ -z "${WSL_INTEROP:-}" ]; then
   for f in /run/WSL/1_interop /run/WSL/2_interop /run/WSL/*_interop; do
@@ -57,6 +59,26 @@ session_alive() {
   gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
     --method org.freedesktop.DBus.NameHasOwner org.gnome.SessionManager 2>/dev/null | grep -q '(true'
 }
+
+# ---------- 桌面模式（跨发行版） ----------
+# devkit：GNOME >= 49（装了 /usr/libexec/mutter-devkit）→ 完整 gnome-session + devkit 窗口
+# nested：GNOME 47/48（只有 --nested）→ 直接跑 gnome-shell --nested（没有 gnome-session）
+detect_mode() {
+  if [ -x "$MUTTER_DEVKIT" ] && "$SHELL_BIN" --help 2>/dev/null | grep -q -- '--devkit'; then
+    echo devkit
+  elif "$SHELL_BIN" --help 2>/dev/null | grep -q -- '--nested'; then
+    echo nested
+  else
+    echo unknown
+  fi
+}
+DESKTOP_MODE=$(detect_mode)
+# Ubuntu 的 gnome-session 需要 XDG_CURRENT_DESKTOP=ubuntu:GNOME 才会选 ubuntu 会话模式，其它发行版用 GNOME
+if [ -f /usr/share/gnome-shell/modes/ubuntu.json ]; then
+  DESKTOP_NAME=ubuntu:GNOME
+else
+  DESKTOP_NAME=GNOME
+fi
 
 usage() {
   cat <<'USAGE'
@@ -156,10 +178,12 @@ ensure_clipbridge() {
 #   2) mutter-devkit（负责“桌面窗口”）用包装脚本单独强制 X11。
 # apt 升级 mutter-dev-bin 会把 /usr/libexec/mutter-devkit 还原成原版，所以每次启动都检查并自愈。
 nested_windows_ok() {
+  # nested 模式没有 mutter-devkit 窗口，也就不存在“应用跑到窗口外”的 devkit 配置问题
+  [ "$DESKTOP_MODE" = devkit ] || return 0
   [ -x "$MUTTER_DEVKIT" ] && grep -q 'wsl-desktop' "$MUTTER_DEVKIT" 2>/dev/null &&
     [ -x "$MUTTER_DEVKIT.real" ] &&
     [ -r "$SHELL_OVERRIDE" ] &&
-    grep -q '^Environment=WAYLAND_DISPLAY=wayland-0' "$SHELL_OVERRIDE" 2>/dev/null &&
+    grep -q '^Environment=WAYLAND_DISPLAY=wayland-1' "$SHELL_OVERRIDE" 2>/dev/null &&
     ! grep -q '^Environment=GDK_BACKEND' "$SHELL_OVERRIDE" 2>/dev/null
 }
 
@@ -176,14 +200,15 @@ EOF
   cat > "$OVERRIDE_TMP" <<'EOF'
 [Service]
 ExecStart=
-ExecStart=/usr/bin/gnome-shell --devkit --no-x11 --mode=%i
+ExecStart=/usr/bin/gnome-shell --devkit --no-x11 --wayland-display=wayland-1 --mode=%i
 Environment=DISPLAY=:0
-Environment=WAYLAND_DISPLAY=wayland-0
+Environment=WAYLAND_DISPLAY=wayland-1
 Environment=PULSE_SERVER=unix:/mnt/wslg/PulseServer
 EOF
 }
 
 ensure_nested_windows() {
+  [ "$DESKTOP_MODE" = devkit ] || return 0
   local marker=WSL_DESKTOP_BACKEND_OK
   nested_windows_ok && return 0
   write_nested_backend_files
@@ -201,13 +226,20 @@ ensure_nested_windows() {
       return 0
     fi
   fi
-  echo "[提示] 没能自动修复「应用跑到桌面窗口外面」的配置（需要 WSL root，或 mutter-dev-bin 被卸载）。" >&2
-  echo "       重新运行 oneclick\\install.ps1 -SkipApt -NoStart 即可修复；" >&2
-  echo "       若 mutter-devkit 原版丢失：wsl -d Ubuntu -u root -- bash -lc 'apt-get install --reinstall -y mutter-dev-bin'" >&2
+  echo "[提示] 没能自动修复「应用跑到桌面窗口外面」的配置（需要 WSL root，或 mutter-devkit 被卸载）。" >&2
+  echo "       重新运行 oneclick\\install.ps1 -SkipPackages -NoStart 即可修复；" >&2
+  echo "       若 mutter-devkit 原版丢失：wsl -d $DISTRO_NAME -u root -- bash -lc 'apt-get install --reinstall -y mutter-dev-bin'" >&2
   return 1
 }
 
+# PipeWire：GNOME 49+ 的 mutter/devkit 启动时要连 PipeWire，没起来 Shell 会直接退出（Fedora/Oracle 实测）
+ensure_pipewire() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  systemctl --user start pipewire.socket pipewire.service wireplumber.service 2>/dev/null || true
+}
+
 run_ensure() {
+  ensure_pipewire || true
   ensure_nested_windows || true
   ensure_desktop_tweaks || true
   ensure_pulse_socket || true
@@ -302,7 +334,9 @@ esac
 if [ "$MODE" = check ]; then
   shell_count=$(pgrep -c -x gnome-shell 2>/dev/null || true)
   echo "gnome-shell:            ${shell_count:-0} 个"
-  echo "gnome-session target:   $(systemctl --user is-active --quiet 'gnome-session@ubuntu.target' 2>/dev/null && echo active || echo inactive)"
+  echo "桌面模式:               $DESKTOP_MODE（devkit=GNOME 49+，nested=GNOME 47/48）"
+  sess_target=$(systemctl --user list-units 'gnome-session@*.target' --no-legend 2>/dev/null | sed -n 's/^\(gnome-session@[^ ]*\.target\).*/\1/p' | head -n1)
+  echo "gnome-session target:   ${sess_target:-无（nested 模式不需要）}"
   echo "SessionManager DBus:    $(session_alive && echo 已占用 || echo 空闲)"
   echo "wsl-desktop-session:    $(systemctl --user is-active --quiet "$UNIT" 2>/dev/null && echo active || echo inactive)"
   if [ "${shell_count:-0}" -gt 0 ]; then
@@ -313,7 +347,7 @@ if [ "$MODE" = check ]; then
     session_state="未运行"
   fi
   echo "会话状态:               $session_state"
-  echo "wayland socket:         $(ls "$XDG_RUNTIME_DIR"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -n1 || echo 无)"
+  echo "wayland socket:         $(find "$XDG_RUNTIME_DIR" -maxdepth 1 -type s -name 'wayland-*' 2>/dev/null | sort | tr '\n' ' ')"
   echo "声音服务:               $(audio_ok && echo 正常 || echo 卡死)  默认输出: $(audio_sink || echo 无)"
   echo "pulse socket 挂载:      $(pulse_socket_ok && echo 已挂载 || echo 未挂载)"
   echo "剪贴板代理(Windows):    $(agent_alive && echo 在跑 || echo 未运行)"
@@ -322,7 +356,7 @@ if [ "$MODE" = check ]; then
   echo "桌面图标扩展(ding):     $(gsettings get org.gnome.shell disabled-extensions 2>/dev/null | grep -q 'ding@rastersoft.com' && echo 已禁用（防闪烁） || echo 运行中)"
   echo "Dock 运行图标:          $(gsettings get org.gnome.shell.extensions.dash-to-dock show-running 2>/dev/null | grep -q true && echo 已开启（保留运行图标，方便切换） || echo 已关闭)"
   if nested_windows_ok; then
-    echo "应用窗口归属:           在 Ubuntu 桌面窗口内（嵌套 Wayland）"
+    echo "应用窗口归属:           在桌面窗口内（嵌套 Wayland，$DESKTOP_MODE 模式）"
   else
     echo "应用窗口归属:           可能跑到 Windows 外层（跑一次 ~/start-desktop.sh 修复）"
   fi
@@ -387,7 +421,7 @@ if [ "$MODE" = auto ] && [ "$IN_UNIT" -eq 0 ]; then
       if systemd-run --user --unit="$UNIT" --collect \
            --setenv=WSL_DESKTOP_IN_UNIT=1 "$SELF" >/dev/null 2>&1; then
         echo "桌面已在后台启动（终端不会被占用）。"
-        echo "  首次启动约需 10~20 秒，之后会弹出「Mutter Development Kit」窗口。"
+        echo "  首次启动约需 10~20 秒，之后会弹出桌面窗口（devkit 模式标题「Mutter Development Kit」，nested 模式标题「gnome-shell」）。"
         echo "  查看状态：~/start-desktop.sh --check    停止：~/start-desktop.sh --stop"
         echo "  需要前台看日志：~/start-desktop.sh --foreground"
         exit 0
@@ -458,6 +492,7 @@ fi
 # 3) 环境
 systemctl --user import-environment DISPLAY WAYLAND_DISPLAY PULSE_SERVER 2>/dev/null || true
 systemctl --user set-environment DISPLAY=:0 PULSE_SERVER="$PULSE_SERVER" 2>/dev/null || true
+systemctl --user set-environment XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP="$DESKTOP_NAME" 2>/dev/null || true
 [ -n "${WSL_INTEROP:-}" ] && systemctl --user set-environment WSL_INTEROP="$WSL_INTEROP" 2>/dev/null || true
 systemctl --user set-environment WSL_DISTRO_NAME="$WSL_DISTRO_NAME" 2>/dev/null || true
 # 关掉系统提示音/启动音：本机 WSLg 在播放提示音后音频服务容易卡死
@@ -468,4 +503,40 @@ gsettings set org.gnome.desktop.sound input-feedback-sounds false 2>/dev/null ||
 echo "即将启动桌面：声音=$(audio_ok && echo 正常 || echo 未知)  剪贴板代理=$(agent_alive && echo 在跑 || echo 未运行)  剪贴板桥=$(systemctl --user is-active --quiet wsl-clipbridge 2>/dev/null && echo active || echo inactive)"
 extra=()
 [ -n "${GALLIUM_DRIVER:-}" ] && extra+=("GALLIUM_DRIVER=$GALLIUM_DRIVER")
-exec env XDG_CURRENT_DESKTOP=ubuntu:GNOME XDG_SESSION_TYPE=wayland "${extra[@]}" gnome-session
+if [ "$DESKTOP_MODE" = nested ]; then
+  # GNOME 47/48：没有 devkit，直接跑一个嵌套 Wayland 合成器（窗口 = 桌面）。
+  # wayland-0 是 WSLg 外层的 socket（只读软链，不能给嵌套合成器用），
+  # 所以挑 wayland-1..wayland-9 里第一个空闲的名字，并显式传给 gnome-shell：
+  #   - 桌面窗口本身走 X11（DISPLAY=:0，GDK 找不到 Wayland 会自动回退）；
+  #   - 子进程继承 WAYLAND_DISPLAY=<嵌套 socket>，应用就留在桌面窗口里。
+  NESTED_SOCKET=""
+  if ! has_shell; then
+    # 清理上次崩溃残留的嵌套 socket（wayland-0 是 WSLg 的软链，必须保留）
+    for f in "$XDG_RUNTIME_DIR"/wayland-*; do
+      [ -e "$f" ] || continue
+      [ -L "$f" ] && continue
+      rm -f "$f"
+    done
+  fi
+  for i in 1 2 3 4 5 6 7 8 9; do
+    if [ ! -e "$XDG_RUNTIME_DIR/wayland-$i" ]; then
+      NESTED_SOCKET="wayland-$i"
+      break
+    fi
+    # 上次崩溃残留的 socket（不是 WSLg 的软链）→ 清掉复用
+    if [ ! -L "$XDG_RUNTIME_DIR/wayland-$i" ] && ! pgrep -x gnome-shell >/dev/null 2>&1; then
+      rm -f "$XDG_RUNTIME_DIR/wayland-$i" "$XDG_RUNTIME_DIR/wayland-$i.lock"
+      NESTED_SOCKET="wayland-$i"
+      break
+    fi
+  done
+  [ -n "$NESTED_SOCKET" ] || NESTED_SOCKET="wayland-9"
+  systemctl --user set-environment WAYLAND_DISPLAY="$NESTED_SOCKET" 2>/dev/null || true
+  echo "使用 nested 模式启动 GNOME Shell（$("$SHELL_BIN" --version 2>/dev/null)，socket=$NESTED_SOCKET）…"
+  nested_args=(--nested)
+  "$SHELL_BIN" --help 2>/dev/null | grep -q -- '--no-x11' && nested_args+=(--no-x11)
+  "$SHELL_BIN" --help 2>/dev/null | grep -q -- '--wayland-display' && nested_args+=("--wayland-display=$NESTED_SOCKET")
+  exec env XDG_CURRENT_DESKTOP=GNOME XDG_SESSION_TYPE=wayland DISPLAY=:0 \
+    WAYLAND_DISPLAY="$NESTED_SOCKET" "${extra[@]}" "$SHELL_BIN" "${nested_args[@]}"
+fi
+exec env XDG_CURRENT_DESKTOP="$DESKTOP_NAME" XDG_SESSION_TYPE=wayland "${extra[@]}" gnome-session

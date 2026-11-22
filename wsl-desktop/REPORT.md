@@ -1,7 +1,7 @@
 # WSL2 嵌套 GNOME 桌面（Ubuntu 26.04 / WSLg）完整技术报告
 
-> 开源分享版：本仓库（公开）
-> 报告生成：2026-11-12（CST）
+> 开源分享版（公开仓库）
+> 报告生成：2026-11-12 02:00 前后（CST）
 > 适用环境：Windows 10 Pro 26H2（build 26300.9974）+ WSL 3.0.5.0 + WSLg 1.0.79 + Ubuntu 26.04.1 LTS（GNOME Shell 50.1）
 
 ---
@@ -16,7 +16,7 @@
      - WSLg 的 PulseAudio 服务会周期性**卡死**（listen 队列堆积、不再 accept），表现为「设置 > 声音」里无输出设备、所有应用失声；
      - **snap 版 Firefox/Thunderbird** 的 `PULSE_SERVER` 被 snapd 固定到会话里的 `pipewire-pulse` 哑设备（`虚拟输出`），导致「闹铃有声音、浏览器没声音」。
    - 修复：环境变量 + 屏蔽 `pipewire-pulse` + **把 WSLg 的 `PulseServer` bind mount 到 `/run/user/1000/pulse/native`**（系统级常驻服务，自动处理 PulseAudio 重启后的重绑定）+ 关闭系统提示音；另提供 `fix-audio.ps1`（重启 WSL 复位）与 `audio-watchdog.ps1`（热重启 PulseAudio 的看门狗）。
-4. 全部脚本/文档已整理为本仓库内容，持续更新。
+4. 全部脚本/文档已提交到私有仓库，之后每次改动都会 `commit + push`。
 
 ---
 
@@ -440,7 +440,7 @@ ensure() {
   fi
   rm -f "$TARGET"
   touch "$TARGET"
-  chown "$TARGET_USER:$TARGET_USER" "$TARGET"
+  chown u:u "$TARGET"
   mount --bind "$SOURCE" "$TARGET" 2>/dev/null || true
 }
 while :; do
@@ -487,7 +487,7 @@ $ paplay --server=unix:/run/user/1000/pulse/native complete.oga   # rc=0（有�
 | 00:54 | 首次 `wsl --shutdown` 后：`pactl` 正常、`paplay` 有声 | OK |
 | 00:56~01:20 | 多次重启/调试；发现「设置>声音」打开会卡死、snap 路由到哑设备 | 不稳定 |
 | 01:26~01:31 | 尝试 socat（失败）→ 改用 bind mount 成功 | 修复路由 |
-| 01:44 | GitHub 仓库创建 | — |
+| 01:44 | GitHub 私有仓库创建（SSH key + gh CLI 设备授权） | — |
 | 01:48 | 再次 `wsl --shutdown`，加音频监控 | OK |
 | 01:51~01:52 | 浏览器播放：`health=OK inputs=1`，用户确认「一直正常」 | OK |
 | 01:54 | 再次卡死（`health=FAIL`，listen 队列 3→6） | 卡死 |
@@ -592,17 +592,17 @@ sudo apt-get install -y ubuntu-desktop mutter-dev-bin
 # 确保 /etc/wsl.conf 有 [boot] systemd=true
 
 # 2) 放入本仓库脚本
-#    （假设仓库在 C:\Users\<用户名>\Desktop\wsl2-nested-gnome-desktop，WSL 内为 ~/wsl2-nested-gnome-desktop）
+#    （假设仓库在 C:\Users\<用户名>\Desktop\wsl2-nested-gnome-desktop，WSL 内为 /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop）
 
 # 3) root：shell override + 音频 bind 守护 + 启动脚本
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/install-audio.sh
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audio/install-audio.sh
 
 # 4) root：剪贴板桥
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/install-clipbridge.sh
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/install-clipbridge.sh
 
 # 5) 用户：启用剪贴板服务 / mask pipewire-pulse / 检查音频路由
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
 
 # 6) 重启 WSL（让 WSLg 重新初始化）
 #    Windows PowerShell: wsl --shutdown
@@ -697,16 +697,17 @@ systemd-run --user --unit=wsl-desktop-session --collect /home/<用户名>/start-
 ## 11. 仓库与提交记录
 
 - 开源仓库：本仓库（公开分享版）
+- 提交邮箱：`<GitHub邮箱>`（避免 GitHub GH007「private email」拦截）
 
 | 提交 | 内容 |
 |---|---|
 | `45c4cca` | 初始：WSL2 嵌套 GNOME 桌面脚本（26.04/24.04 路线）、剪贴板桥、音频修复 |
 | `9b9e737` | 音频：snap 应用经 bind mount 连接 WSLg；新增音频状态记录脚本 |
-| `9d3debf` | 文档：文档修正与音频实测结果；fix-audio 增加 socket 挂载检查 |
+| `9d3debf` | 文档：补充私有仓库地址与音频实测结果；fix-audio 增加 socket 挂载检查 |
 | `（本报告）` | 新增完整技术报告 `wsl-desktop/REPORT.md`；音频 bind 守护增加「PulseAudio 重启后自动重绑定」；新增 `audio-watchdog.ps1` |
 | `（2026-11-12 下午）` | 音频卡死热重启自愈（启动脚本 + Windows 代理看门狗）；剪贴板架构重构（Windows 代理 + 文件邮箱，脱离 WSLg RDP 剪贴板）；新增第 13 章 |
 
-> 约定：此后每次改动都会提交并更新本仓库。
+> 约定：此后每次改动都会提交并推送到该私有仓库。
 
 ---
 
@@ -1213,6 +1214,89 @@ Windows→内层 `FINAL-WIN-1`、内层→Windows `FINAL-LIN-2` 均通过。
 | `wsl-desktop/TROUBLESHOOTING.md` | 第 6 章新增「④ 双向都不通：扩展被自动禁用」；速查表/报错表补充 |
 | `wsl-desktop/REPORT.md` | 本节 |
 
+
+## 16. 跨发行版移植：Fedora 45 / Kali 2026.3 / Oracle Linux 10（2026-11-22 23:20 – 2026-11-23 00:40 CST）
+
+**目标**：原方案只支持 Ubuntu 26.04（GNOME 50 + `mutter-devkit`）。本次把同一套「桌面窗口 + 剪贴板 + 声音 + 一键脚本」移植到
+Fedora 45（GNOME 51）、Kali 2026.3（GNOME 50）、Oracle Linux 10.3（GNOME 47，RHEL 10 系），并保持 Ubuntu 行为不变。
+
+### 16.1 环境矩阵
+
+| 发行版 | GNOME Shell | mutter | gnome-session | `mutter-devkit` | 本项目模式 | 桌面窗口标题 |
+|---|---|---|---|---|---|---|
+| Ubuntu 26.04.1 | 50.1 | 50.1 | 50.x | ✅ `mutter-dev-bin` | devkit | `Mutter Development Kit (Ubuntu)` |
+| Fedora 45 | 51.1 | 51.1 | 51.x | ✅ `mutter-devkit` | devkit | `Mutter Development Kit (FedoraLinux-45)` |
+| Kali 2026.3 | 50.5 | 50.5 | 50.x | ✅ `mutter-dev-bin` | devkit | `Mutter Development Kit (kali-linux)` |
+| Oracle Linux 10.3 | 47.8（固定） | 47.5 | 46.0 | ❌ RHEL 没打包 | **nested** | `gnome-shell (oracle-linux-10)` |
+
+### 16.2 移植中遇到的关键差异（按发现顺序）
+
+1. **Oracle Linux 10 的 WSL 镜像什么都没准备**：
+   `ps -p 1 -o comm=` 输出 `init(oracle-lin`（systemd 没开）、`getent passwd 1000` 为空（没有普通用户）、
+   `dnf repolist` 只有 `base`/`latest`（没有 AppStream，GNOME 全在 AppStream）。
+   安装器现在会写 `/etc/wsl.conf`（`[boot] systemd=true` + `[user] default=u`）、创建 uid 1000 用户、
+   添加 `https://yum.oracle.com/repo/OracleLinux/OL10/appstream/x86_64/`（官方 WSL 镜像没带），
+   然后返回退出码 3 让 Windows 侧 `wsl --terminate` 后重试。
+2. **RHEL/Oracle 没有 `mutter-devkit`**：AppStream 同时提供 `gnome-shell 47.4/47.8/49.4/49.5` 和 `mutter 47.5/49.4`，
+   但 `repoquery -l mutter` 里没有 `/usr/libexec/mutter-devkit`，`--whatprovides '*/mutter-devkit'` 为空；
+   而 GNOME 49 已经移除了 `--nested`。结论：**只能用 GNOME 47.8 的 `gnome-shell --nested`**，安装器固定 47。
+3. **GNOME 47 的 nested 模式不能用 gnome-session 托管**：gnome-session 46 直接启动 shell，
+   GNOME 49+ 才有的 `org.gnome.Shell@.service` override 在它这里不生效。改成 `start-desktop.sh` 直接在 systemd 用户单元里跑
+   `gnome-shell --nested --no-x11 --wayland-display=wayland-1`；因此 `--check` 里「SessionManager DBus: 空闲」是正常的。
+4. **`/tmp/.X11-unix` 是只读挂载**：nested 模式默认会拉 Xwayland，报
+   `Failed to start X Wayland: Directory "/tmp/.X11-unix" is not writable`（WSLg 的只读挂载）→ 加 `--no-x11`（X11-only 应用不能跑）。
+5. **WSLg 的 `wayland-0` 软链**：Fedora/Kali/OL 的 `/run/user/1000/wayland-0` 是指向 `/mnt/wslg/runtime-dir` 的软链
+   （Ubuntu 26.04 没有），mutter 锁不到它就会自动改用 `wayland-1`；如果 override 里写死 `WAYLAND_DISPLAY=wayland-0`，
+   应用会连到 WSLg 外层，窗口就“跑出去”了。修复：override + 启动脚本统一显式 `--wayland-display=wayland-1` + `WAYLAND_DISPLAY=wayland-1`；
+   nested 模式会挑空闲的 `wayland-N` 并清理上次崩溃残留的 socket。
+6. **PipeWire 是硬依赖**：GNOME 49+ 的 mutter/devkit 启动时要连 PipeWire，Fedora 上 PipeWire 没起来时
+   Shell 直接退出：`Context got an error: Failed to connect pipewire context`。
+   `install.sh` 和 `start-desktop.sh` 现在都会先 `systemctl --user start pipewire.socket pipewire.service wireplumber.service`。
+7. **包名/工具差异**：RHEL 10 没有 `gnome-terminal`（改用 `ptyxis`）、没有 `wl-clipboard`；
+   Debian 系是 `pipewire-pulse`（不是 Fedora 的 `pipewire-pulseaudio`）；
+   Kali 的 `kali-desktop-gnome` 会拖 300+ 包，改用最小 GNOME 集合。
+8. **最小镜像没有 `awk`**（Fedora/OL）：`install-audio.sh` / `install-clipbridge.sh` 里的用户探测改成 POSIX `while read`；
+   `wsl-clipbridge.service` 去掉写死的 `/run/user/1000`（systemd 用户单元自带 `XDG_RUNTIME_DIR`）。
+9. **一键脚本重写**：`oneclick/install.ps1` 增加 `-Distro` / `-User` / `-All` / `-SkipPackages`（兼容 `-SkipApt`）/
+   `-NoStart` / `-DryRun`，自动检测 systemd（退出码 3 → `wsl --terminate` 后重试）、自动解析普通用户；
+   `start-desktop.ps1` / `fix-audio.ps1` / `restart-desktop.ps1` 也支持 `-Distro`/`-User` 并自动发现发行版。
+
+### 16.3 验证矩阵（2026-11-22 23:52 – 2026-11-23 00:40）
+
+| 发行版 | 桌面窗口 | 应用留在桌面内 | Windows→Linux | Linux→Windows | 声音 |
+|---|---|---|---|---|---|
+| Ubuntu 26.04 | ✅ `Mutter Development Kit (Ubuntu)` | ✅ 计算器在桌面内 | ✅ `UBU-WIN2-031500` | ✅ `UBU-LIN2-031500` | ✅ `RDPSink` |
+| Fedora 45 | ✅ `Mutter Development Kit (FedoraLinux-45)` | ✅ 计算器在桌面内（无新 Windows 窗口） | ✅ journal `win -> inner (14 chars)` | ✅ Windows 剪贴板收到 `FED-LIN-030700` | ✅ `RDPSink` |
+| Kali 2026.3 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Oracle Linux 10.3 | ✅ `gnome-shell (oracle-linux-10)` | ✅ 计算器在桌面内 | ✅ 扩展 ACTIVE + `win -> inner` 日志 | ⏳ 仓库没有 `wl-clipboard`，命令行模拟无法复制（扩展 ACTIVE，同一实现已在 Fedora/Ubuntu 双向实测） | ✅ `RDPSink` |
+
+> Kali 验证命令（与 Ubuntu 相同）：`~/start-desktop.sh --check`、`wl-copy`/`wl-paste` 双向。
+> Oracle Linux 10 的 `Mutter Development Kit` 标题不会出现（nested 模式），窗口标题是 `gnome-shell (oracle-linux-10)`，标题会随前台应用变化。
+
+### 16.4 已知限制（新增）
+
+- **同时开多个发行版桌面 → 剪贴板互相抢**：Windows 侧交换目录全局一个（`C:\Users\Public\wsl-desktop-clip`），
+  多个桌面的扩展会同时写 `linux.req.txt` / 读 `win.txt`，表现为剪贴板“时好时坏”。建议一次只开一个桌面。
+- **Oracle Linux 10 是受限的 nested 会话**：没有完整 gnome-session（无 gsd/会话服务），没有 Xwayland；
+  dnf 升级 `gnome-shell` 到 49 会失去 nested（重跑安装器会装回 47）。
+- **Kali 用最小 GNOME**（非 `kali-desktop-gnome` 全套）：需要 Kali 菜单/工具自行安装。
+
+### 16.5 文件变更
+
+| 文件 | 改动 |
+|---|---|
+| `wsl-desktop/install.sh` | 新增：跨发行版安装器（systemd/用户/apt-dnf/包集合/devkit-vs-nested） |
+| `wsl-desktop/audio/install-audio.sh` | devkit 检测、`wayland-1`、无 awk、任意用户 |
+| `wsl-desktop/audio/stop-desktop.sh` | 通用 gnome-session target |
+| `wsl-desktop/clipboard/start-desktop.sh` | 模式检测（devkit/nested）、PipeWire、wayland-N、跨发行版文案 |
+| `wsl-desktop/clipboard/install-clipbridge.sh` | 无 awk、任意用户 |
+| `wsl-desktop/clipboard/wsl-clipbridge.service` | 去掉写死的 XDG_RUNTIME_DIR |
+| `wsl-desktop/clipboard/extension/metadata.json` | 支持 GNOME 51 |
+| `oneclick/install.ps1` | 重写：-Distro/-User/-All/-SkipPackages/-NoStart/-DryRun，自动 systemd/用户 |
+| `oneclick/start-desktop.ps1` | -User、自动发行版/用户、桌面模式显示 |
+| `oneclick/fix-audio.ps1` / `restart-desktop.ps1` | -User、自动发行版/用户 |
+| `README.md` / `oneclick/README.md` / `wsl-desktop/TROUBLESHOOTING.md` / `wsl-desktop/README.md` | 多发行版说明、4.10、6⑤ 等 |
+
 ---
 
-*报告结束。后续修改请同步更新本文件并更新到本仓库。*
+*报告结束。后续修改请同步更新本文件并推送到私有仓库。*

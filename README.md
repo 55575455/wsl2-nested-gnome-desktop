@@ -1,14 +1,20 @@
-# WSL2 嵌套 GNOME 桌面（Ubuntu 26.04 / WSLg）
+# WSL2 嵌套 GNOME 桌面（Ubuntu / Fedora / Kali / Oracle Linux · WSLg）
 
 <p align="center">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white">
-  <img alt="GNOME" src="https://img.shields.io/badge/GNOME-50-4A86CF?logo=gnome&logoColor=white">
+  <img alt="Fedora" src="https://img.shields.io/badge/Fedora-45-51A2DA?logo=fedora&logoColor=white">
+  <img alt="Kali" src="https://img.shields.io/badge/Kali-2026-557C94?logo=kalilinux&logoColor=white">
+  <img alt="Oracle Linux" src="https://img.shields.io/badge/Oracle%20Linux-10-F80000?logo=oracle&logoColor=white">
+  <img alt="GNOME" src="https://img.shields.io/badge/GNOME-47%20%7C%2050%20%7C%2051-4A86CF?logo=gnome&logoColor=white">
   <img alt="WSLg" src="https://img.shields.io/badge/WSLg-1.0.79-0078D4?logo=windows&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-personal%20use-lightgrey">
 </p>
 
 <p align="center">
-  在 <b>Windows + WSL2 + WSLg</b> 上跑出一个完整可用的 <b>Ubuntu 26.04 GNOME 50 桌面</b>，并补齐 WSLg 的两块短板：<b>剪贴板双向同步</b> 与 <b>嵌套桌面的声音</b>——启动脚本每次都会自动自检、卡死就热重启（约 3 秒），不用重装、也不用手动重启 WSL。
+  在 <b>Windows + WSL2 + WSLg</b> 上跑出一个完整可用的 <b>GNOME 桌面窗口</b>——支持
+  <b>Ubuntu 26.04（GNOME 50）</b>、<b>Fedora 45（GNOME 51）</b>、<b>Kali 2026（GNOME 50）</b>、
+  <b>Oracle Linux 10（GNOME 47，nested 模式）</b>，并补齐 WSLg 的两块短板：<b>剪贴板双向同步</b> 与
+  <b>嵌套桌面的声音</b>——启动脚本每次都会自动自检、卡死就热重启（约 3 秒），不用重装、也不用手动重启 WSL。
 </p>
 
 <p align="center">
@@ -116,7 +122,8 @@ bash ~/wsl2-nested-gnome-desktop/oneclick/show-paths.sh --apply  # 自动替换
 
 ## ✨ 功能特性
 
-- 🖥️ **完整 GNOME 50 桌面**：窗口化运行，由 systemd 用户单元托管，**关掉终端也不会退出**
+- 🖥️ **完整 GNOME 桌面**（GNOME 47 / 50 / 51）：窗口化运行，由 systemd 用户单元托管，**关掉终端也不会退出**
+- 🌍 **多发行版**：Ubuntu 26.04 / Fedora 45 / Kali 2026 用 GNOME 49+ 的 `mutter-devkit`；Oracle Linux 10（RHEL 10 没有打包 devkit）自动退回 GNOME 47 的 `--nested` 模式。一条 `oneclick/install.ps1 -Distro 名字`（或 `-All`）装完，脚本自动识别 apt/dnf、自动开 systemd、自动建普通用户
 - ⚡ **后台启动、不占终端**：`~/start-desktop.sh`（或 Windows 里 `oneclick/start-desktop.ps1`）会立即返回，桌面在后台启动；需要前台看日志才用 `--foreground`
 - 🧯 **会话自愈**：桌面窗口关掉后再次 `~/start-desktop.sh` 会自动清理残留会话（不再报 “A graphical session is already running!”）
 - 🪟 **应用窗口留在桌面内**：从 Ubuntu 桌面里启动的应用（GTK/Qt/snap/Flatpak）不再变成 Windows 上单独的窗口——gnome-shell 不再强制 `GDK_BACKEND=x11`，只有「桌面窗口」由包装脚本单独走 X11；apt 升级后启动脚本会自愈（见 TROUBLESHOOTING 4.9）
@@ -169,14 +176,31 @@ flowchart LR
 
 ## 🚀 快速开始
 
-> 前提：Windows 10 22H2+ / Windows 11，WSL2 + WSLg（`.wslconfig` 里 `guiApplications=true`），Ubuntu 26.04 内 `systemd=true`。
+> 前提：Windows 10 22H2+ / Windows 11，WSL2 + WSLg（`.wslconfig` 里 `guiApplications=true`）；
+> 发行版里需要 systemd（安装器会自动写 `/etc/wsl.conf` 并重启发行版）。
+> 支持 Ubuntu 26.04 / Fedora 45 / Kali 2026 / Oracle Linux 10 / Debian（GNOME 47~51）。
 
 ```powershell
 wsl --version    # 确认 WSL / WSLg 版本
+
+# 推荐：一键安装（自动识别 apt/dnf；-All = 所有已安装发行版都装）
+powershell -ExecutionPolicy Bypass -File .\oneclick\install.ps1
+powershell -ExecutionPolicy Bypass -File .\oneclick\install.ps1 -Distro FedoraLinux-45
+powershell -ExecutionPolicy Bypass -File .\oneclick\install.ps1 -Distro oracle-linux-10
+powershell -ExecutionPolicy Bypass -File .\oneclick\install.ps1 -All
+
+# 以后启动 / 看状态 / 只修声音剪贴板（都带 -Distro）
+powershell -ExecutionPolicy Bypass -File .\oneclick\start-desktop.ps1 -Distro FedoraLinux-45
+powershell -ExecutionPolicy Bypass -File .\oneclick\start-desktop.ps1 -Distro oracle-linux-10 -Status
 ```
 
-> 推荐在 WSL 里克隆本仓库：`git clone <本仓库地址> ~/wsl2-nested-gnome-desktop`。
-> 下面的命令默认仓库位于 WSL 的 `~/wsl2-nested-gnome-desktop`（或 Windows 的 `C:\Users\<用户名>\Desktop\wsl2-nested-gnome-desktop`），路径不同请自行替换。
+### 手动安装（Ubuntu，可选）
+
+> 下面是一步步的手动命令（等价于 `install.ps1`）；其他发行版用 `install.ps1` 或
+> `wsl-desktop/install.sh` 即可，它会自动选包装什么。
+
+> 以下路径假设仓库在 `C:\Users\<用户名>\Desktop\wsl2-nested-gnome-desktop`；如果位置不同，把命令里的
+> `/mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop` 换成你的实际路径。
 
 ```bash
 # 1) 安装桌面组件（一次性）
@@ -184,12 +208,12 @@ sudo apt-get update
 sudo apt-get install -y ubuntu-desktop mutter-dev-bin
 
 # 2) 安装本仓库的脚本（路径按你的实际位置调整）
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/install-audio.sh
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/install-clipbridge.sh
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audio/install-audio.sh
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/install-clipbridge.sh
 
 # 3) 启用剪贴板服务 + 应用 snap 音频路由
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
 
 # 4) 重启 WSL（Windows 侧）让 WSLg 重新初始化
 #    PowerShell: wsl --shutdown
@@ -204,7 +228,7 @@ bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
 #   单元已存在时它会报 already loaded（正常），日常统一用上面的 ~/start-desktop.sh
 ```
 
-之后会弹出一个标题为 **Mutter Development Kit** 的窗口——就是你的 Ubuntu 桌面（关掉窗口 = 关掉桌面）。
+之后会弹出一个桌面窗口，就是你的 Linux 桌面（关掉窗口 = 关掉桌面）：devkit 模式标题是 **Mutter Development Kit (发行版)**，Oracle Linux 10 的 nested 模式标题是 **gnome-shell (发行版)**。
 
 日常「声音/剪贴板又不对了」只要在 WSL 里跑一条（桌面在跑也安全，只做修复）：
 
@@ -264,12 +288,15 @@ bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
 
 | 项目 | 结果 |
 |---|---|
-| 桌面窗口（GNOME 50.1 + mutter-devkit） | ✅ 运行中 |
+| 桌面窗口（Ubuntu 26.04 / GNOME 50.1 + mutter-devkit） | ✅ 运行中 |
 | 桌面会话托管（systemd user unit） | ✅ 关终端不退出 |
 | 剪贴板 Linux → Windows | ✅ 约 0.5~2 秒（`clip-agent.ps1`） |
 | 剪贴板 Windows → Linux | ✅ 约 0.5~2 秒（`clipbridge` ⇄ 代理） |
 | 剪贴板中文双向 | ✅ |
-| 应用窗口归属 | ✅ 启动的应用留在 Ubuntu 桌面窗口内（嵌套 Wayland；纯 X11 应用除外） |
+| 应用窗口归属（devkit 模式：Ubuntu/Fedora/Kali） | ✅ 启动的应用留在桌面窗口内（嵌套 Wayland；纯 X11 应用除外） |
+| 应用窗口归属（nested 模式：Oracle Linux 10） | ✅ 实测应用留在 `gnome-shell` 桌面窗口内 |
+| Fedora 45（GNOME 51.1 + mutter-devkit 51.1） | ✅ 桌面 / 声音 / 剪贴板双向实测通过 |
+| Oracle Linux 10.3（GNOME 47.8，nested） | ✅ 桌面 / 声音实测通过；剪贴板扩展 ACTIVE |
 | 声音输出 / 输入 | ✅ `RDPSink` / `RDPSource` |
 | 启动时自动修复音频卡死 | ✅ 实测约 3 秒恢复（17:03 桌面重启、17:11 手工 kill 各一次） |
 | 音频看门狗（Windows 代理） | ✅ 每 20 秒检测，日志 `C:\Users\Public\wsl-desktop-clip\agent.log` |
@@ -287,6 +314,9 @@ bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
 - **嵌套会话里 Ubuntu 桌面图标扩展（ding）会以 X11Wayland 运行**：反复重建桌面窗口，导致任务栏图标闪烁/弹「警告」；`~/start-desktop.sh` 已默认禁用（想恢复桌面图标：`gnome-extensions enable ding@rastersoft.com`）。
 - **剪贴板同步已改为 GNOME Shell 扩展（`clipbridge@wsl-desktop`）**：在 shell 内部直接读写剪贴板，不再每 0.2 秒调用 `wl-paste`（旧方式会创建临时窗口，Dock 会把它当“未知应用”刷出齿轮图标、还会抢焦点）；Dock 的“运行中程序”图标保持开启。
 - **纯 X11 应用仍会跑到 Windows 外层**：嵌套会话没有自己的 X 服务器；Wayland 应用（GNOME/GTK、Qt、snap、Flatpak 等）都能留在 Ubuntu 桌面窗口内。遇到某个应用跑出去，先看 TROUBLESHOOTING 4.9。
+- **同时开多个发行版桌面时，剪贴板会互相抢**：Windows 侧交换目录是全局的（`C:\Users\Public\wsl-desktop-clip`），多个桌面同时同步会互相覆盖。建议一次只开一个桌面（TROUBLESHOOTING 6 ⑤）。
+- **Oracle Linux 10 是 nested 模式**：没有完整 `gnome-session`（会话服务比 Ubuntu 少），且没有 Xwayland（纯 X11 程序不能跑）；RHEL/Oracle 的 AppStream 没打包 `mutter-devkit`，安装器会固定 GNOME 47（升级到 49 会失去 nested 模式）。
+- **Kali 用最小 GNOME 集合**（不是 `kali-desktop-gnome` 全套），体积更小；需要 Kali 全套菜单/工具可自行 `apt install kali-desktop-gnome`。
 
 ---
 
@@ -301,5 +331,5 @@ bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/setup-snap-audio.sh
 ---
 
 <p align="center">
-  <sub>由 DeepSeek Harness 协助整理 · 持续更新</sub>
+  <sub>由 DeepSeek Harness 协助整理 · 每次改动均提交并推送到私有仓库</sub>
 </p>

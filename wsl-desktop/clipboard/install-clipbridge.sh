@@ -4,7 +4,14 @@ set -eu
 
 TARGET_USER="${TARGET_USER:-${SUDO_USER:-}}"
 if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = root ]; then
-  TARGET_USER=$(awk -F: '$3>=1000 && $3<65534 {print $1; exit}' /etc/passwd)
+  TARGET_USER=""
+  while IFS=: read -r name _pass uid _gid _gecos _home _shell; do
+    [ "$name" = nobody ] && continue
+    if [ "$uid" -ge 1000 ] && [ "$uid" -lt 65534 ]; then
+      TARGET_USER="$name"
+      break
+    fi
+  done < /etc/passwd
 fi
 [ -n "$TARGET_USER" ] || { echo "找不到普通用户，请设置 TARGET_USER=用户名 再运行"; exit 1; }
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)

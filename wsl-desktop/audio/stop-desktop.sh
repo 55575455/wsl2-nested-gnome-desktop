@@ -4,7 +4,7 @@
 set -uo pipefail
 
 UNIT=wsl-desktop-session
-TARGETS=('gnome-session@ubuntu.target' 'gnome-session-manager.target' 'gnome-session-basic-services.target' 'gnome-session-services.target')
+TARGETS=('gnome-session.target' 'gnome-session-manager.target' 'gnome-session-basic-services.target' 'gnome-session-services.target' 'gnome-session@ubuntu.target' 'gnome-session@gnome.target' 'gnome-session@user.target')
 QUIET=0
 [ "${1:-}" = "--quiet" ] && QUIET=1
 log() { [ "$QUIET" = 1 ] || echo "$@"; }
@@ -37,10 +37,7 @@ fi
 
 # 3) 停 target / 服务
 systemctl --user stop "${TARGETS[@]}" 2>/dev/null || true
-systemctl --user stop \
-  'gnome-session-manager@ubuntu.service' \
-  'gnome-session-monitor.service' \
-  'gnome-session-ctl.service' 2>/dev/null || true
+systemctl --user stop 'gnome-session-manager@*.service' 'gnome-session-monitor.service' 'gnome-session-ctl.service' 2>/dev/null || true
 
 # 4) 进程兜底
 for n in gnome-session-service gnome-session-ctl gnome-session-init-worker gnome-session-binary \

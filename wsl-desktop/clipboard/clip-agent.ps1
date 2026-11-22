@@ -1,4 +1,4 @@
-﻿<#
+<#
   WSLg nested GNOME desktop - Windows side agent (clipboard + audio watchdog).
 
   Started automatically by ~/start-desktop.sh (through WSL interop) and runs hidden.

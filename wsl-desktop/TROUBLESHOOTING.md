@@ -1,6 +1,6 @@
 # WSL2 嵌套 GNOME 桌面 · 故障排除指南（全程复制粘贴）
 
-> 适用：Windows 10/11 + WSL2 + WSLg + Ubuntu 26.04（GNOME 50）
+> 适用：Windows 10/11 + WSL2 + WSLg + **Ubuntu 26.04 / Fedora 45 / Kali 2026 / Oracle Linux 10**
 > 本指南假设你**不会 Linux，也不想学**——只需要复制命令、粘贴、回车。
 > 开源分享版（公开仓库）
 
@@ -22,6 +22,7 @@
    - 4.7 任务栏图标反复闪烁 / 「警告：Desktop Icons NG 正在 X11Wayland 下运行」
    - 4.8 任务栏齿轮图标反复闪（剪贴板桥轮询 wl-paste 引起）
    - 4.9 从 Ubuntu 桌面启动的应用“跳出桌面”，变成 Windows 上单独的窗口
+   - 4.10 其他发行版（Fedora / Kali / Oracle Linux）桌面起不来 / 应用跑出去
 5. [声音问题](#5-声音问题)
    - 5.1 先分清是哪种“没声音”
    - 5.2 设置里显示“无输出设备”（音频服务卡死）
@@ -114,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File "C:\你的路径\oneclick\restart-deskt
 
 ### 1.1 把脚本发给别人
 
-因为不是每个人都会用 Git，最省事的方式：
+因为仓库是私有的，最省事的方式：
 
 1. 用记事本打开 `oneclick/install.ps1`，**全选 → 复制**；
 2. 发给对方（微信/QQ/邮件都行）；
@@ -123,6 +124,46 @@ powershell -ExecutionPolicy Bypass -File "C:\你的路径\oneclick\restart-deskt
    `powershell -ExecutionPolicy Bypass -File .\install.ps1`。
 
 脚本里已经**内嵌了全部需要的内容**，对方不需要下载仓库、不需要懂 Linux。
+
+### 1.2 其他发行版（Fedora / Kali / Oracle Linux / Debian）
+
+`install.ps1` 会自动识别 apt / dnf，并按发行版安装：
+
+```powershell
+# 只装某一个发行版（名字用 wsl -l -v 查看）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro FedoraLinux-45
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro kali-linux
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro oracle-linux-10
+
+# 所有已安装的发行版都装一遍（逐个安装，最后汇总）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -All
+
+# 已经装过桌面组件，只更新脚本/配置（不重复下载）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro FedoraLinux-45 -SkipPackages
+```
+
+启动/状态/修复也带 `-Distro`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-desktop.ps1 -Distro FedoraLinux-45
+powershell -ExecutionPolicy Bypass -File .\start-desktop.ps1 -Distro oracle-linux-10 -Status
+powershell -ExecutionPolicy Bypass -File .\restart-desktop.ps1 -Distro kali-linux
+```
+
+各发行版的差异（`install.ps1` 会自动处理）：
+
+| 发行版 | 桌面组件 | 桌面模式 | 窗口标题 |
+|---|---|---|---|
+| Ubuntu 26.04 | `ubuntu-desktop` + `mutter-dev-bin` | devkit（GNOME 50） | `Mutter Development Kit (Ubuntu)` |
+| Fedora 45 | `gnome-shell` + `mutter-devkit` | devkit（GNOME 51） | `Mutter Development Kit (FedoraLinux-45)` |
+| Kali 2026 | 最小 GNOME 集合 + `mutter-dev-bin` | devkit（GNOME 50） | `Mutter Development Kit (kali-linux)` |
+| Oracle Linux 10 | `gnome-shell-47` + `mutter-47`（RHEL 没有 devkit） | **nested**（GNOME 47 的 `--nested`） | `gnome-shell (oracle-linux-10)` |
+
+> Oracle Linux 10 的 WSL 镜像默认**没开 systemd、没有普通用户、没配 AppStream 仓库**。
+> `install.ps1` 会写好 `/etc/wsl.conf` 并自动 `wsl --terminate` 后重试，第一次安装会多花一两分钟。
+>
+> 同时开**多个发行版桌面**时，剪贴板会互相抢（它们共用 Windows 侧的同一个交换目录）——
+> 建议一次只开一个桌面（见第 6 章 ⑤）。
 
 ---
 
@@ -449,20 +490,20 @@ gnome-extensions enable clipbridge@wsl-desktop
 **现在的处理**（安装脚本 + `~/start-desktop.sh` 自动做，apt 升级后也会自愈）：
 
 1. `gnome-shell` 的 systemd override 去掉 `GDK_BACKEND=x11`，只保留
-   `DISPLAY=:0`、`WAYLAND_DISPLAY=wayland-0`、`PULSE_SERVER`；
+   `DISPLAY=:0`、`WAYLAND_DISPLAY=wayland-1`、`PULSE_SERVER`；
 2. 只负责“桌面窗口”的 `mutter-devkit` 改用包装脚本 `/usr/libexec/mutter-devkit` 单独强制 X11，
    原版二进制保留为 `/usr/libexec/mutter-devkit.real`；
-3. 这样 gnome-shell 启动的应用会走**嵌套 Wayland 桌面**（`wayland-0`），
+3. 这样 gnome-shell 启动的应用会走**嵌套 Wayland 桌面**（`wayland-1`），
    snap 应用（Firefox / 软件中心）也能通过 `WAYLAND_DISPLAY` 正确进入桌面。
 
 **验证**（Windows 任务栏里应该只有一个 Ubuntu 桌面窗口）：
 
 ```bash
 ~/start-desktop.sh --check
-# 应用窗口归属:           在 Ubuntu 桌面窗口内（嵌套 Wayland）
+# 应用窗口归属:           在桌面窗口内（嵌套 Wayland，devkit 模式）
 ```
 
-- 显示「在 Ubuntu 桌面窗口内」= 正常；
+- 显示「在桌面窗口内」= 正常；
 - 显示「可能跑到 Windows 外层」= 配置被还原（例如 apt 升级了 mutter），先跑（不会重启桌面）：
 
 ```bash
@@ -470,7 +511,7 @@ gnome-extensions enable clipbridge@wsl-desktop
 ```
 
   再重启桌面生效：`~/start-desktop.sh --stop && ~/start-desktop.sh`
-- 也可以在 Windows 任务栏确认：只剩「Mutter Development Kit (Ubuntu)」，没有单独的
+- 也可以在 Windows 任务栏确认：只剩「Mutter Development Kit (发行版)」，没有单独的
   「计算器 (Ubuntu)」「软件更新器 (Ubuntu)」窗口。
 
 **限制**：
@@ -484,10 +525,74 @@ gnome-extensions enable clipbridge@wsl-desktop
 
 ```bash
 # Windows PowerShell
-wsl -d Ubuntu -u root -- bash -lc "sed -i '/^Environment=WAYLAND_DISPLAY=wayland-0/d; s/^Environment=DISPLAY=:0$/Environment=GDK_BACKEND=x11\nEnvironment=DISPLAY=:0/' /etc/systemd/user/org.gnome.Shell@.service.d/override.conf; mv -f /usr/libexec/mutter-devkit.real /usr/libexec/mutter-devkit"
+wsl -d Ubuntu -u root -- bash -lc "sed -i '/^Environment=WAYLAND_DISPLAY=wayland-1/d; s/^Environment=DISPLAY=:0$/Environment=GDK_BACKEND=x11\nEnvironment=DISPLAY=:0/' /etc/systemd/user/org.gnome.Shell@.service.d/override.conf; mv -f /usr/libexec/mutter-devkit.real /usr/libexec/mutter-devkit"
 ```
 
 然后在 WSL 里重启桌面：`~/start-desktop.sh --stop && ~/start-desktop.sh`。
+
+### 4.10 其他发行版（Fedora / Kali / Oracle Linux）桌面起不来 / 应用跑出去
+
+**先看模式**（所有发行版通用）：
+
+```bash
+~/start-desktop.sh --check
+```
+
+| 看到什么 | 正常吗 |
+|---|---|
+| `桌面模式: devkit`，`SessionManager DBus: 已占用` | 正常（Ubuntu / Fedora / Kali） |
+| `桌面模式: nested`，`SessionManager DBus: 空闲`，`gnome-session target: 无` | **正常**（Oracle Linux 10 没有 devkit，不走 gnome-session） |
+| `gnome-shell: 0 个` | 桌面没起来，继续往下 |
+| `应用窗口归属: 可能跑到 Windows 外层` | 配置没生效，跑一次 `~/start-desktop.sh` 会自动修 |
+
+**① 桌面没起来，先确认 systemd / 用户对不对**（在 WSL 里跑）：
+
+```bash
+ps -p 1 -o comm=            # 必须输出 systemd；输出 init 说明没开
+id -un                      # 不能是 root（GNOME 不能以 root 运行）
+```
+
+- 输出不是 `systemd`：`/etc/wsl.conf` 里要有 `[boot]` + `systemd=true`，然后在 Windows 执行
+  `wsl --terminate 发行版名`，再重新运行安装脚本；
+- 输出是 `root`：运行 `powershell -ExecutionPolicy Bypass -File .\oneclick\install.ps1 -Distro 发行版名`
+  （安装器会创建普通用户 `u`，Oracle Linux 10 就是这样）。
+
+**② 前台看启动日志**（把真正的报错打出来）：
+
+```bash
+~/start-desktop.sh --stop
+~/start-desktop.sh --foreground 2>&1 | tail -40
+```
+
+常见报错与处理：
+
+| 报错 | 原因 / 处理 |
+|---|---|
+| `Failed to start X Wayland: Directory "/tmp/.X11-unix" is not writable` | nested 模式默认要启动 Xwayland，但 WSLg 把它挂成只读；本项目启动时已加 `--no-x11`，如果你手动跑 `gnome-shell --nested`，也要加 `--no-x11` |
+| `Context got an error: Failed to connect pipewire context` | PipeWire 没起来（Fedora/OL 实测）；`systemctl --user start pipewire.socket pipewire.service wireplumber.service` |
+| `WL: unable to lock lockfile .../wayland-0.lock` | WSLg 的 `wayland-0` 软链被占用；本项目已改成显式用 `wayland-1`（见 4.9/本节 ③） |
+| `Unit wsl-desktop-session.service was already loaded` | 桌面单元已存在（正常）；用 `~/start-desktop.sh`，不要手敲 `systemd-run` |
+
+**③ 应用还是跑到 Windows 外层（nested 模式）**：
+
+```bash
+# 看嵌套 socket 是不是 wayland-1（不是就重启桌面）
+ls -l /run/user/1000/wayland-* 2>/dev/null
+
+# 看实际生效的启动参数（Fedora/Kali devkit 模式）
+cat /etc/systemd/user/org.gnome.Shell@.service.d/override.conf 2>/dev/null
+
+# 重新安装配置并重启（所有发行版通用）
+wsl -d 发行版名 -u root -- bash -lc "bash /opt/wsl-desktop/install.sh --skip-packages"
+~/start-desktop.sh --stop && ~/start-desktop.sh
+```
+
+**④ nested 模式的已知限制**（Oracle Linux 10）：
+
+- 没有完整 `gnome-session`：系统设置/部分会话服务比 Ubuntu 少，属正常；
+- 没有 Xwayland（`--no-x11`）：**纯 X11 程序不能在这个桌面里运行**，Wayland/GTK/Qt 应用正常；
+- 如果 `dnf` 把 `gnome-shell` 升级到 49（RHEL 10 的 AppStream 同时提供 47/49，但 49 没有 `mutter-devkit`），
+  nested 模式会失效——重新运行 `oneclick/install.ps1 -Distro oracle-linux-10` 会自动装回 47。
 
 ---
 
@@ -750,7 +855,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Public\wsl-desktop-
 [WSL] 测试内层剪贴板本身是否正常：
 
 ```bash
-export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0
+export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1
 printf TEST123 | wl-copy; sleep 1; wl-paste -n; echo
 tail -n 5 /tmp/clipbridge.log
 cat /mnt/c/Users/Public/wsl-desktop-clip/linux.req.txt; echo
@@ -790,7 +895,22 @@ rm -f "$XDG_RUNTIME_DIR/gnome-shell-disable-extensions"
 gnome-extensions enable clipbridge@wsl-desktop
 ```
 
-**⑤ 全都试过还不行**
+**⑤ 同时开了多个发行版的桌面 → 剪贴板互相抢**
+
+Windows 侧的交换目录是全局的（`C:\Users\Public\wsl-desktop-clip`），
+多个发行版的桌面同时运行时，每个桌面的扩展都会往同一个 `linux.req.txt` 写、也都从同一个
+`win.txt` 读，于是 Windows 剪贴板会被“最后那个桌面”覆盖，看起来像时好时坏。
+
+处理办法：**一次只开一个桌面**（推荐）。想看另一个发行版时先关掉当前的：
+
+```bash
+# 在当前桌面所属发行版里
+~/start-desktop.sh --stop
+```
+
+确认只剩一个桌面窗口（任务栏里只有一个 `Mutter Development Kit (...)` 或 `gnome-shell (...)`）。
+
+**⑥ 全都试过还不行**
 
 ```powershell
 # [Windows] 彻底重来：重启 WSL
@@ -906,7 +1026,7 @@ rm -f ~/.config/systemd/user/wsl-clipbridge.service /usr/local/bin/clipbridge
 | 看剪贴板桥日志 | `tail -n 20 /tmp/clipbridge.log` |
 | 看剪贴板代理日志 | `tail -n 20 /mnt/c/Users/Public/wsl-desktop-clip/agent.log` |
 | 看代理心跳 | `ls -l /mnt/c/Users/Public/wsl-desktop-clip/agent.heartbeat` |
-| 剪贴板自测 | `bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/final-clip-test.sh` |
+| 剪贴板自测 | `bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/final-clip-test.sh` |
 | 装 flatpak 应用（用户级，不会弹「需要认证」） | `flatpak install --user flathub <应用ID>` |
 | 关闭桌面图标扩展（防闪烁/警告） | `gnome-extensions disable ding@rastersoft.com` |
 | 查看/切换剪贴板同步方式（扩展 or 旧轮询） | `~/start-desktop.sh --check`（看「剪贴板同步」行） |

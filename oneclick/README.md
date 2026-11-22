@@ -17,7 +17,7 @@
 | 脚本 | 用途 | 运行方式（Windows PowerShell） |
 |---|---|---|
 | `show-paths.ps1` / `show-paths.sh` | **公开仓库必读**：显示本机实际值 + 列出所有含占位符的脱敏文件；`-Apply`/`--apply` 自动填写 | `powershell -ExecutionPolicy Bypass -File .\show-paths.ps1` |
-| `install.ps1` | 一键安装：检查 WSLg → 装桌面组件 → 配剪贴板/声音 → 启动桌面 | `powershell -ExecutionPolicy Bypass -File .\install.ps1` |
+| `install.ps1` | 一键安装：检查 WSLg → 装桌面组件 → 配剪贴板/声音 → 启动桌面（`-Distro` / `-All` / `-User`） | `powershell -ExecutionPolicy Bypass -File .\install.ps1` |
 | `start-desktop.ps1` / `start-desktop.cmd` | **一键启动桌面（后台，立即返回，不占终端）**；`-Status` 看状态、`-Stop` 停止、`-FixOnly` 只修声音/剪贴板、`-Wait` 等窗口出现 | `powershell -ExecutionPolicy Bypass -File .\start-desktop.ps1`（任意目录：用完整路径或双击 `.cmd`） |
 | `fix-audio.ps1` | 一键修声音：先让 `~/start-desktop.sh --fix` 自检并热重启音频（约 3 秒恢复），不行再重启 WSL、重开桌面 | `powershell -ExecutionPolicy Bypass -File .\fix-audio.ps1` |
 | `restart-desktop.ps1` | 一键重开桌面（清理残留会话 + 启动，同时会修声音/剪贴板） | `powershell -ExecutionPolicy Bypass -File .\restart-desktop.ps1` |
@@ -46,17 +46,46 @@
 > `Unit wsl-desktop-session.service was already loaded or has a fragment file`——这是正常的，
 > 用 `~/start-desktop.sh` 即可（幂等，会自动清理残留单元）。
 
+## 支持的发行版
+
+`install.ps1` 自动识别 apt / dnf，并按发行版选择桌面组件和启动模式：
+
+| 发行版 | 桌面组件 | 桌面模式 | 窗口标题 |
+|---|---|---|---|
+| Ubuntu 26.04 | `ubuntu-desktop` + `mutter-dev-bin` | devkit | `Mutter Development Kit (Ubuntu)` |
+| Fedora 45 | `gnome-shell` + `mutter-devkit` | devkit | `Mutter Development Kit (FedoraLinux-45)` |
+| Kali 2026 | 最小 GNOME 集合 + `mutter-dev-bin` | devkit | `Mutter Development Kit (kali-linux)` |
+| Oracle Linux 10 | `gnome-shell-47` + `mutter-47`（没有 devkit） | nested | `gnome-shell (oracle-linux-10)` |
+| Debian | `gnome-shell` + `mutter` | devkit / nested 自动判断 | 同上 |
+
+```powershell
+# 只装一个
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro FedoraLinux-45
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro kali-linux
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro oracle-linux-10
+
+# 所有已安装发行版（逐个装，最后汇总；失败不会中断其它发行版）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -All
+```
+
+> Oracle Linux 10 的 WSL 镜像默认没开 systemd、没有普通用户、没配 AppStream 仓库：
+> 安装器会写 `/etc/wsl.conf`、自动 `wsl --terminate` 后重试，并创建普通用户 `u`。
+> 第一次安装会多花一两分钟，属正常。
+
 ## 安装脚本的可选参数
 
 ```powershell
 # 只检查，不做改动
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -DryRun
 
-# 已经装过桌面组件，只配置
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -SkipApt
+# 已经装过桌面组件，只更新脚本/配置（不重复下载；兼容旧参数名 -SkipApt）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -SkipPackages
 
 # 安装配置但不自动启动桌面
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoStart
+
+# 指定用户（默认自动用发行版里的普通用户；没有就创建 u）
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro OracleLinux -User u
 
 # 发行版名字不是 Ubuntu（比如装的时候自定义了名字）
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Distro 你的发行版名

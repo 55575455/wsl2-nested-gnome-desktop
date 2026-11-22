@@ -6,7 +6,6 @@ StartLimitIntervalSec=0
 Type=simple
 Environment=DISPLAY=:0
 Environment=WAYLAND_DISPLAY=wayland-0
-Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/usr/local/bin/clipbridge
 Restart=on-failure
 RestartSec=2

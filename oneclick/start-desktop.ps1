@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 一键启动 / 查看 / 停止 WSL 里的嵌套 GNOME 桌面（自包含，复制粘贴即可）
 #
 # 特点：启动后**立即返回，不占用当前终端/窗口**（桌面由 systemd 用户单元托管）。
@@ -17,7 +17,8 @@
 #    先 cd 到仓库目录，或用完整路径运行，或直接双击 start-desktop.cmd。
 #
 # 参数：
-#   -Distro    WSL 发行版名（默认 Ubuntu）
+#   -Distro    WSL 发行版名（默认自动：有 Ubuntu 用 Ubuntu，否则用第一个）
+#   -User      指定用户（默认用发行版里的普通用户）
 #   -Status    只查看状态
 #   -Stop      停止桌面
 #   -FixOnly   只修复声音/剪贴板，不启动桌面
@@ -25,7 +26,8 @@
 #   -Quiet     少打印
 # ============================================================
 param(
-    [string]$Distro = 'Ubuntu',
+    [string]$Distro = '',
+    [string]$User = '',
     [switch]$Status,
     [switch]$Stop,
     [switch]$FixOnly,
@@ -35,9 +37,23 @@ param(
 $ErrorActionPreference = 'Continue'
 $env:WSL_UTF8 = '1'
 
+if (-not $Distro) {
+    $raw = & wsl.exe -l -q 2>$null
+    $list = @()
+    foreach ($line in $raw) {
+        $n = (($line -replace "`0", '')).Trim()
+        if ($n -and $n -notmatch '^docker-desktop') { $list += $n }
+    }
+    if ($list.Count -eq 0) { Write-Host '[失败] 一个 WSL 发行版都没找到。' -ForegroundColor Red; exit 1 }
+    if ($list -contains 'Ubuntu') { $Distro = 'Ubuntu' } else { $Distro = $list[0] }
+}
+
 function Info([string]$m) { if (-not $Quiet) { Write-Host $m } }
 function Fail([string]$m) { Write-Host "[失败] $m" -ForegroundColor Red; exit 1 }
-function Run-Wsl([string]$cmd) { return (& wsl.exe -d $Distro -- bash -lc $cmd 2>&1) }
+function Run-Wsl([string]$cmd) {
+    if ($User) { return (& wsl.exe -d $Distro -u $User -- bash -lc $cmd 2>&1) }
+    return (& wsl.exe -d $Distro -- bash -lc $cmd 2>&1)
+}
 function ShellCount {
     $r = ((Run-Wsl 'pgrep -c -x gnome-shell 2>/dev/null || echo 0') -join '').Trim()
     if ($r -match '^\d+$') { return [int]$r } else { return 0 }
@@ -45,7 +61,7 @@ function ShellCount {
 function Print-Check {
     $lines = Run-Wsl '~/start-desktop.sh --check 2>&1'
     foreach ($l in $lines) {
-        if ($l -match '^(gnome-shell|wsl-desktop-session|会话状态|声音服务|pulse socket|剪贴板代理|剪贴板桥|桌面图标扩展|Dock 运行图标|应用窗口归属|剪贴板同步)') { Info $l }
+        if ($l -match '^(gnome-shell|桌面模式|wsl-desktop-session|会话状态|声音服务|pulse socket|剪贴板代理|剪贴板桥|桌面图标扩展|Dock 运行图标|应用窗口归属|剪贴板同步)') { Info $l }
     }
 }
 
@@ -54,6 +70,19 @@ $probe = ((Run-Wsl 'echo WSL_OK') -join '').Trim()
 if ($probe -notmatch 'WSL_OK') {
     Fail "无法进入 WSL 发行版 '$Distro'。请用 -Distro 指定正确名字（wsl -l -v 查看），或先运行 oneclick/install.ps1。"
 }
+
+if (-not $User) {
+    $u = ((& wsl.exe -d $Distro -- id -un 2>$null) -join '').Trim()
+    if ($u -eq 'root') {
+        $hasU = ((& wsl.exe -d $Distro -u root -- bash -lc 'getent passwd u >/dev/null 2>&1 && echo YES' 2>$null) -join '').Trim()
+        if ($hasU -match 'YES') { $u = 'u' }
+    }
+    $User = $u
+}
+if ($User -eq 'root' -or -not $User) {
+    Fail "发行版 $Distro 的默认用户是 root（GNOME 不能以 root 运行）。请先运行 oneclick/install.ps1 -Distro $Distro（会创建普通用户 u）。"
+}
+Info "发行版：$Distro    用户：$User"
 
 if ($Stop) {
     Info '正在停止桌面…'
@@ -96,7 +125,7 @@ Info ''
 if ($n -gt 0 -and $alreadyRunning) {
     Info '✅ 桌面已经在运行（没有重复启动）。'
 } elseif ($n -gt 0) {
-    Info '✅ 桌面已启动（窗口标题「Mutter Development Kit」）。'
+    Info '✅ 桌面已启动（窗口标题「Mutter Development Kit」或「gnome-shell」，标题末尾带发行版名）。'
 } elseif ($cleanedStale) {
     Info '已清理残留桌面单元并启动，窗口通常 10~20 秒内出现；稍等再运行：'
     Info '   powershell -ExecutionPolicy Bypass -File .\start-desktop.ps1 -Status'
@@ -107,6 +136,6 @@ if ($n -gt 0 -and $alreadyRunning) {
 Info '----- 当前状态 -----'
 Print-Check
 Info ''
-Info '提示：关闭「Mutter Development Kit」窗口 = 关闭桌面；重新打开运行本脚本即可。'
+Info '提示：关闭桌面窗口 = 关闭桌面；重新打开运行本脚本即可。'
 Info '      重复执行原 systemd-run 命令会报 “Unit ... already loaded”（单元已存在），属正常，不用管；本脚本可重复运行。'
 Info '      在任意目录运行：用完整路径，或先 cd 到仓库目录；双击 start-desktop.cmd 也可以（自动定位）。'

@@ -1,11 +1,34 @@
 # WSL2「桌面一键脚本」：Ubuntu 26.04 / 24.04
 
-> 开源分享版（公开仓库）；完整文档见 [README.md](../README.md)、[TROUBLESHOOTING.md](TROUBLESHOOTING.md)、[REPORT.md](REPORT.md)。
+> 开源分享版（公开仓库）
 > 完整技术报告（架构、根因分析、验证矩阵、排障手册）：[REPORT.md](REPORT.md)
 >
 > ⚠️ **公开仓库（脱敏版）用户**：本文里的 `C:\Users\<用户名>`、`/home/<用户名>`、`~/wsl2-nested-gnome-desktop` 都是占位符。
 > **先运行** `oneclick/show-paths.ps1`（Windows）或 `bash oneclick/show-paths.sh`（WSL），按输出填成本机实际路径；不填的话路径不存在。
 > （实际路径版会提示「未发现占位符」，跳过即可。）
+
+## 支持哪些发行版（2026-11-22 起）
+
+从这一版开始不再限定 Ubuntu。`wsl-desktop/install.sh`（在 WSL 里以 root 运行）和
+`oneclick/install.ps1 -Distro 名字` / `-All` 会自动识别发行版：
+
+| 发行版 | 安装的桌面组件 | 桌面模式 | 桌面窗口标题 |
+|---|---|---|---|
+| Ubuntu 26.04 | `ubuntu-desktop` + `mutter-dev-bin` | devkit（GNOME 50） | `Mutter Development Kit (Ubuntu)` |
+| Fedora 45 | `gnome-shell` + `mutter-devkit` | devkit（GNOME 51） | `Mutter Development Kit (FedoraLinux-45)` |
+| Kali 2026 | 最小 GNOME 集合 + `mutter-dev-bin` | devkit（GNOME 50） | `Mutter Development Kit (kali-linux)` |
+| Oracle Linux 10 | `gnome-shell-47` + `mutter-47`（RHEL 没有 devkit） | nested（`--nested --no-x11`） | `gnome-shell (oracle-linux-10)` |
+| Debian | `gnome-shell` + `mutter`（有 devkit 就 devkit） | 自动判断 | 同上 |
+
+```bash
+# WSL 里（root）：自动装包 + 配音频/剪贴板 + 部署 ~/start-desktop.sh
+sudo bash /mnt/c/<仓库>/wsl-desktop/install.sh            # 自动找普通用户
+sudo TARGET_USER=d bash /mnt/c/<仓库>/wsl-desktop/install.sh  # 指定用户
+```
+
+> Oracle Linux 10 的 WSL 镜像默认没开 systemd、没有普通用户、没配 AppStream 仓库；
+> `install.sh` 会写好 `/etc/wsl.conf`（systemd + 默认用户）并返回退出码 3，
+> Windows 侧 `install.ps1` 会自动 `wsl --terminate` 后重试。
 
 ## 先说清楚：为什么没有「Xwayland + Ubuntu 26.04 一键命令」
 
@@ -48,7 +71,7 @@ wsl --install -d Ubuntu-26.04
 
 # 2) 第一次打开 Ubuntu 26.04，创建普通用户后，在 Ubuntu 终端里执行：
 #    （路径按你的工作目录调整；本机为 C:\Users\<用户名>\Desktop\wsl2-nested-gnome-desktop）
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604.sh --yes
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604.sh --yes
 
 # 3) 重启 WSL
 wsl.exe --shutdown
@@ -60,7 +83,7 @@ wsl.exe --shutdown
 可选：RDP（想要登录界面 / 全屏 / 剪贴板）
 
 ```bash
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604-rdp.sh
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604-rdp.sh
 wsl.exe --shutdown
 ~/start-desktop.sh
 # 然后在 Windows「远程桌面连接」里连 localhost:3390
@@ -69,7 +92,7 @@ wsl.exe --shutdown
 也可以从 Windows 侧「一条命令」跑安装（仍是 root 执行；桌面必须以普通用户启动）：
 
 ```powershell
-wsl -d Ubuntu-26.04 -u root -- bash ~/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604.sh --yes
+wsl -d Ubuntu-26.04 -u root -- bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604.sh --yes
 wsl.exe --shutdown
 # 重开 Ubuntu 终端后：~/start-desktop.sh
 ```
@@ -94,10 +117,10 @@ wsl.exe --shutdown
 
 ```bash
 # 1) root 安装桥脚本 + 代理脚本 + 用户级 systemd 服务
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/install-clipbridge.sh
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/install-clipbridge.sh
 
 # 2) 普通用户启用并启动服务
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
 ```
 
 日常使用与检查：
@@ -106,7 +129,7 @@ bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/enable-clipbridge.sh
 ~/start-desktop.sh --check                 # 看「剪贴板代理(Windows): 在跑」「剪贴板桥(服务): active」
 tail -n 20 /tmp/clipbridge.log             # 桥的同步记录（双向都记）
 cat /mnt/c/Users/Public/wsl-desktop-clip/agent.log   # 代理日志（Windows 侧，双向都记）
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/final-clip-test.sh   # 双向自测
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/clipboard/final-clip-test.sh   # 双向自测
 ```
 
 > Windows 侧代理也可以手动启动（桌面启动脚本没跑时）：
@@ -127,8 +150,8 @@ WSLg 自带音频服务（`RDPSink` → Windows 默认扬声器）。嵌套桌�
 安装（已经配好的机器可跳过，脚本可重复执行）：
 
 ```bash
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/install-audio.sh   # root：写 override / environment.d / start-desktop.sh
-bash ~/wsl2-nested-gnome-desktop/wsl-desktop/audio/restart-desktop.sh      # 普通用户：重启桌面会话并自检
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audio/install-audio.sh   # root：写 override / environment.d / start-desktop.sh
+bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audio/restart-desktop.sh      # 普通用户：重启桌面会话并自检
 ```
 
 自检（应看到 `Default Sink: RDPSink`）：
@@ -207,7 +230,7 @@ wsl -d Ubuntu -u <用户名> -- bash -lc "~/start-desktop.sh"
 wsl --install -d Ubuntu-24.04
 
 # 2) 首次打开创建用户后，在 Ubuntu 终端里：
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2404-xwayland.sh --yes --resolution 1920x1080
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2404-xwayland.sh --yes --resolution 1920x1080
 
 # 3) 重启 WSL
 wsl.exe --shutdown
@@ -224,10 +247,10 @@ sudo systemctl start graphical.target
 
 ```bash
 # 路线 A
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604.sh --rollback
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2604.sh --rollback
 
 # 路线 B（会尝试恢复 /usr/bin/Xorg、gnome-session、默认 target 等）
-sudo bash ~/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2404-xwayland.sh --rollback
+sudo bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/wsl-desktop-2404-xwayland.sh --rollback
 ```
 
 最干净的回滚永远是：`wsl --export` 备份后 `wsl --unregister` 重建。安装桌面元包会拉入大量依赖，手动卸载很难恢复原样。

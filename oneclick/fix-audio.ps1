@@ -1,10 +1,11 @@
-﻿# ============================================================
+# ============================================================
 # WSL2 嵌套 GNOME 桌面 —— 一键修声音（自包含，复制粘贴即可）
 # 用法（Windows PowerShell）：
 #   powershell -ExecutionPolicy Bypass -File .\fix-audio.ps1
 # 可选：
 #   -SkipWslRestart   不重启 WSL（只做热重启）
-#   -Distro 名字      发行版不叫 Ubuntu 时指定
+#   -Distro 名字      发行版名（默认自动：有 Ubuntu 用 Ubuntu，否则用第一个）
+#   -User 名字        指定用户（默认用发行版里的普通用户）
 #
 # 2026-11-12 起的新流程（实测热重启约 3 秒恢复，通常无需重启 WSL）：
 #   1) 在 WSL 里运行 ~/start-desktop.sh --fix：
@@ -15,18 +16,42 @@
 #   4) 打印声音 / 剪贴板最终状态
 # ============================================================
 param(
-    [string]$Distro = 'Ubuntu',
+    [string]$Distro = '',
+    [string]$User = '',
     [switch]$SkipWslRestart
 )
 $ErrorActionPreference = 'Continue'
 $env:WSL_UTF8 = '1'
+
+if (-not $Distro) {
+    $raw = & wsl.exe -l -q 2>$null
+    $list = @()
+    foreach ($line in $raw) {
+        $n = (($line -replace "`0", '')).Trim()
+        if ($n -and $n -notmatch '^docker-desktop') { $list += $n }
+    }
+    if ($list.Count -eq 0) { Write-Host '[失败] 一个 WSL 发行版都没找到。' -ForegroundColor Red; exit 1 }
+    if ($list -contains 'Ubuntu') { $Distro = 'Ubuntu' } else { $Distro = $list[0] }
+}
+if (-not $User) {
+    $u = ((& wsl.exe -d $Distro -- id -un 2>$null) -join '').Trim()
+    if ($u -eq 'root') {
+        $hasU = ((& wsl.exe -d $Distro -u root -- bash -lc 'getent passwd u >/dev/null 2>&1 && echo YES' 2>$null) -join '').Trim()
+        if ($hasU -match 'YES') { $u = 'u' }
+    }
+    $User = $u
+}
+if ($User -eq 'root' -or -not $User) {
+    Write-Host "[失败] 发行版 $Distro 的默认用户是 root（GNOME 不能以 root 运行）。请先运行 oneclick/install.ps1 -Distro $Distro。" -ForegroundColor Red
+    exit 1
+}
 
 function Step([string]$m) { Write-Host "`n===== $m =====" -ForegroundColor Cyan }
 function Info([string]$m) { Write-Host "  $m" }
 function Warn([string]$m) { Write-Host "  [!] $m" -ForegroundColor Yellow }
 function Ok([string]$m)   { Write-Host "  [OK] $m" -ForegroundColor Green }
 
-function Run-Wsl([string]$cmd) { return (& wsl.exe -d $Distro -- bash -lc $cmd 2>$null) }
+function Run-Wsl([string]$cmd) { return (& wsl.exe -d $Distro -u $User -- bash -lc $cmd 2>$null) }
 
 function CheckAudio {
     $r = ((Run-Wsl 's=$(LC_ALL=C timeout 6 pactl -s unix:/mnt/wslg/PulseServer list short sinks 2>/dev/null); [ -n "$s" ] && echo AUDIO_OK || echo AUDIO_FAIL') -join '').Trim()
@@ -49,7 +74,7 @@ function CheckBridge {
 }
 
 function StartDesktop {
-    & wsl.exe -d $Distro -- bash -lc 'systemd-run --user --unit=wsl-desktop-session --collect ~/start-desktop.sh' 2>$null | Out-Null
+    & wsl.exe -d $Distro -u $User -- bash -lc 'systemd-run --user --unit=wsl-desktop-session --collect ~/start-desktop.sh' 2>$null | Out-Null
 }
 
 # ---- 1) 让 start-desktop.sh 自检/热重启音频，并拉起剪贴板代理 ----
@@ -67,7 +92,7 @@ if ($audioOk) {
 # ---- 2) 手工热重启 WSLg PulseAudio ----
 if (-not $audioOk) {
     Step '2/4 手工热重启 WSLg 的 PulseAudio'
-    & wsl.exe -d $Distro -- bash -lc 'pkill -f gnome-control-center 2>/dev/null; true' 2>$null | Out-Null
+    & wsl.exe -d $Distro -u $User -- bash -lc 'pkill -f gnome-control-center 2>/dev/null; true' 2>$null | Out-Null
     & wsl.exe --system -- sh -c 'pkill -9 pulseaudio' 2>$null | Out-Null
     Start-Sleep -Seconds 8
     $audioOk = CheckAudio
@@ -80,7 +105,7 @@ if (-not $audioOk) {
     if ($SkipWslRestart) {
         Warn '已指定 -SkipWslRestart，跳过重启 WSL'
     } else {
-        & wsl.exe -d $Distro -- bash -lc '~/stop-desktop.sh 2>/dev/null || true' 2>$null | Out-Null
+        & wsl.exe -d $Distro -u $User -- bash -lc '~/stop-desktop.sh 2>/dev/null || true' 2>$null | Out-Null
         wsl.exe --shutdown
         Start-Sleep -Seconds 10
         Info '重新启动桌面…'
@@ -124,7 +149,7 @@ if ($audioOk) {
   1) 再运行一次本脚本（有时需要第二次）；
   2) 看 C:\Users\Public\wsl-desktop-clip\agent.log 里有没有反复 audio FAIL；
   3) 按 TROUBLESHOOTING.md 的 5.2 / 5.6 节处理；
-  4) 最后手段：wsl --shutdown，重新打开 Ubuntu 终端，运行 ~/start-desktop.sh
+  4) 最后手段：wsl --shutdown，重新打开该发行版的终端，运行 ~/start-desktop.sh
 '@
     exit 1
 }

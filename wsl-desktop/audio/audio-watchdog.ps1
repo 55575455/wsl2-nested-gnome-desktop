@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env pwsh
+#!/usr/bin/env pwsh
 # WSLg 音频看门狗（Windows 侧后台运行）——旧版脚本，保留作参考
 #
 # 2026-11-12 起：看门狗已内置进剪贴板代理 wsl-desktop/clipboard/clip-agent.ps1
