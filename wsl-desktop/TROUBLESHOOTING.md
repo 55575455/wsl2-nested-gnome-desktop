@@ -23,6 +23,7 @@
    - 4.8 任务栏齿轮图标反复闪（剪贴板桥轮询 wl-paste 引起）
    - 4.9 从 Ubuntu 桌面启动的应用“跳出桌面”，变成 Windows 上单独的窗口
    - 4.10 其他发行版（Fedora / Kali / Oracle Linux）桌面起不来 / 应用跑出去
+   - 4.11 把桌面语言改成中文（或改回英文）
 5. [声音问题](#5-声音问题)
    - 5.1 先分清是哪种“没声音”
    - 5.2 设置里显示“无输出设备”（音频服务卡死）
@@ -599,6 +600,58 @@ cat /etc/systemd/user/org.gnome.Shell@.service.d/override.conf 2>/dev/null
 wsl -d 发行版名 -u root -- bash -lc "bash /opt/wsl-desktop/install.sh --skip-packages"
 ~/start-desktop.sh --stop && ~/start-desktop.sh
 ```
+
+### 4.11 把桌面语言改成中文（或改回英文）
+
+GNOME 的界面语言由**启动桌面时的 `LANG`** 决定（不是装个语言包就自动变）。本项目约定：
+`~/start-desktop.sh` 启动时会读取 `/etc/wsl-desktop/lang`，有就按里面的 `LANG`/`LANGUAGE` 启动。
+
+**改成中文**（在 WSL 里，root）：
+
+```bash
+# 1) 生成中文 locale（只需要一次）
+sed -i 's/^# *zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen
+locale-gen
+
+# 2) 告诉 start-desktop.sh 用中文（必须）
+install -d -m 0755 /etc/wsl-desktop
+printf 'LANG=zh_CN.UTF-8\nLANGUAGE=zh_CN:zh\n' > /etc/wsl-desktop/lang
+
+# 3) 系统默认也设成中文（可选，但推荐；以后终端/新会话也是中文）
+printf 'LANG=zh_CN.UTF-8\nLANGUAGE=zh_CN:zh\n' > /etc/default/locale
+
+# 4) 让 D-Bus 激活的应用也拿到中文环境
+install -d -o <用户名> -g <用户名> /home/<用户名>/.config/environment.d
+printf 'LANG=zh_CN.UTF-8\nLANGUAGE=zh_CN:zh\n' > /home/<用户名>/.config/environment.d/00-locale.conf
+chown <用户名>:<用户名> /home/<用户名>/.config/environment.d/00-locale.conf
+```
+
+然后**重启桌面**（会关掉当前窗口）：
+
+```bash
+~/start-desktop.sh --stop && ~/start-desktop.sh
+```
+
+验证：
+
+```bash
+pid=$(pgrep -f 'gnome-shell --devkit' | head -1); tr '\0' '\n' < /proc/$pid/environ | grep -E '^(LANG|LANGUAGE)='
+# 期望：LANG=zh_CN.UTF-8 / LANGUAGE=zh_CN:zh
+```
+
+中文显示需要中文字体：Debian/Ubuntu 装 `fonts-noto-cjk`（`apt install -y fonts-noto-cjk`），
+Fedora 装 `google-noto-sans-cjk-fonts`。没有字体时界面是中文但会显示方框。
+
+**改回英文**：
+
+```bash
+rm -f /etc/wsl-desktop/lang
+printf 'LANG=en_US.UTF-8\n' > /etc/default/locale
+rm -f /home/<用户名>/.config/environment.d/00-locale.conf
+~/start-desktop.sh --stop && ~/start-desktop.sh
+```
+
+> 已经实测：Debian（GNOME 51）执行完上面步骤后，顶栏/搜索框/应用名都变成中文（“输入以搜索”“设置”“实用工具”）。
 
 **④ nested 模式的已知限制**（Oracle Linux 10）：
 

@@ -47,6 +47,14 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user
 export PULSE_SERVER="${PULSE_SERVER:-unix:/mnt/wslg/PulseServer}"
 export WSL_DISTRO_NAME="${WSL_DISTRO_NAME:-$(. /etc/os-release 2>/dev/null; echo "${NAME:-Linux}")}"
 DISTRO_NAME="$WSL_DISTRO_NAME"
+# 可选：桌面语言（例如中文）。/etc/wsl-desktop/lang 里写 LANG=zh_CN.UTF-8 / LANGUAGE=zh_CN:zh
+if [ -r /etc/wsl-desktop/lang ]; then
+  # shellcheck disable=SC1091
+  . /etc/wsl-desktop/lang
+  export LANG LANGUAGE
+  systemctl --user set-environment LANG="$LANG" 2>/dev/null || true
+  [ -n "${LANGUAGE:-}" ] && systemctl --user set-environment LANGUAGE="$LANGUAGE" 2>/dev/null || true
+fi
 # 用 systemd-run 启动时环境里可能没有 WSL_INTEROP，这里补上，Windows 互操作才可用
 if [ -z "${WSL_INTEROP:-}" ]; then
   for f in /run/WSL/1_interop /run/WSL/2_interop /run/WSL/*_interop; do
@@ -503,7 +511,15 @@ systemctl --user import-environment DISPLAY WAYLAND_DISPLAY PULSE_SERVER 2>/dev/
 systemctl --user set-environment DISPLAY=:0 PULSE_SERVER="$PULSE_SERVER" 2>/dev/null || true
 systemctl --user set-environment XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP="$DESKTOP_NAME" 2>/dev/null || true
 [ -n "${WSL_INTEROP:-}" ] && systemctl --user set-environment WSL_INTEROP="$WSL_INTEROP" 2>/dev/null || true
-systemctl --user set-environment WSL_DISTRO_NAME="$WSL_DISTRO_NAME" 2>/dev/null || true
+systemctl --user set-environment WSL_DISTRO_NAME="$WSL_DISTRO_NAME"
+# 可选：桌面语言（例如中文）。/etc/wsl-desktop/lang 里写 LANG=zh_CN.UTF-8 / LANGUAGE=zh_CN:zh
+if [ -r /etc/wsl-desktop/lang ]; then
+  # shellcheck disable=SC1091
+  . /etc/wsl-desktop/lang
+  export LANG LANGUAGE
+  systemctl --user set-environment LANG="$LANG" 2>/dev/null || true
+  [ -n "${LANGUAGE:-}" ] && systemctl --user set-environment LANGUAGE="$LANGUAGE" 2>/dev/null || true
+fi 2>/dev/null || true
 # 关掉系统提示音/启动音：本机 WSLg 在播放提示音后音频服务容易卡死
 gsettings set org.gnome.desktop.sound event-sounds false 2>/dev/null || true
 gsettings set org.gnome.desktop.sound input-feedback-sounds false 2>/dev/null || true
