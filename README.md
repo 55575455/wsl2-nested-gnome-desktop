@@ -178,7 +178,7 @@ flowchart LR
 
 > 前提：Windows 10 22H2+ / Windows 11，WSL2 + WSLg（`.wslconfig` 里 `guiApplications=true`）；
 > 发行版里需要 systemd（安装器会自动写 `/etc/wsl.conf` 并重启发行版）。
-> 支持 Ubuntu 26.04 / Fedora 45 / Kali 2026 / Oracle Linux 10 / Debian（GNOME 47~51）。
+> 支持 Ubuntu 26.04 / Fedora 45 / Kali 2026 / Oracle Linux 10 / Debian testing（GNOME 47~51）。
 
 ```powershell
 wsl --version    # 确认 WSL / WSLg 版本
@@ -297,6 +297,7 @@ bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audi
 | 应用窗口归属（nested 模式：Oracle Linux 10） | ✅ 实测应用留在 `gnome-shell` 桌面窗口内 |
 | Fedora 45（GNOME 51.1 + mutter-devkit 51.1） | ✅ 桌面 / 声音 / 剪贴板双向实测通过 |
 | Kali 2026.3（GNOME 50.5 + mutter-dev-bin） | ✅ 桌面 / 声音 / 剪贴板双向实测通过（`KALI-LIN-000500` / `KALI-WIN-000500`） |
+| Debian testing（GNOME 51.0 + mutter-dev-bin） | ✅ 桌面 / 声音 / 剪贴板双向实测通过（`DEB-LIN-001000` / `DEB-WIN-001000`） |
 | Oracle Linux 10.3（GNOME 47.8，nested） | ✅ 桌面 / 声音实测通过；剪贴板扩展 ACTIVE |
 | 声音输出 / 输入 | ✅ `RDPSink` / `RDPSource` |
 | 启动时自动修复音频卡死 | ✅ 实测约 3 秒恢复（17:03 桌面重启、17:11 手工 kill 各一次） |
@@ -318,6 +319,7 @@ bash /mnt/c/Users/<用户名>/Desktop/wsl2-nested-gnome-desktop/wsl-desktop/audi
 - **同时开多个发行版桌面时，剪贴板会互相抢**：Windows 侧交换目录是全局的（`C:\Users\Public\wsl-desktop-clip`），多个桌面同时同步会互相覆盖。建议一次只开一个桌面（TROUBLESHOOTING 6 ⑤）。
 - **Oracle Linux 10 是 nested 模式**：没有完整 `gnome-session`（会话服务比 Ubuntu 少），且没有 Xwayland（纯 X11 程序不能跑）；RHEL/Oracle 的 AppStream 没打包 `mutter-devkit`，安装器会固定 GNOME 47（升级到 49 会失去 nested 模式）。
 - **Kali 用最小 GNOME 集合**（不是 `kali-desktop-gnome` 全套），体积更小；需要 Kali 全套菜单/工具可自行 `apt install kali-desktop-gnome`。
+- **Fedora 默认启用的 gdm 会被安装器停用**：WSL 没有物理 seat，gdm 的登录界面会被套成第二个「Mutter Development Kit」窗口；停用后不影响桌面启动。
 
 ---
 

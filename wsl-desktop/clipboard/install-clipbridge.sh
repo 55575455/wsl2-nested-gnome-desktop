@@ -34,7 +34,9 @@ install -d -m 0755 "$EXT_DST"
 install -m 0644 "$EXT_SRC/metadata.json" "$EXT_SRC/extension.js" "$EXT_DST/"
 echo "已安装 GNOME Shell 扩展: $EXT_DST"
 
-# 4) 用户服务
+# 4) 用户服务（同样先修正 .config 属主，避免 dconf/gsettings 写不进去）
+install -d -m 0755 "$TARGET_HOME/.config"
+chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config"
 install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config/systemd/user"
 install -m 0644 "$SRC/clipboard/wsl-clipbridge.service" "$TARGET_HOME/.config/systemd/user/wsl-clipbridge.service"
 chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config/systemd/user/wsl-clipbridge.service"

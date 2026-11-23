@@ -95,6 +95,13 @@ fi
 USER_UID=$(uid_of "$USER_NAME")
 USER_HOME=$(getent passwd "$USER_NAME" | cut -d: -f6)
 
+# 最小镜像（Debian/Kali 等）里 ~/.config 可能不存在，或被 install -d 建成了 root 属主；
+# 用户写不进 dconf 时，gsettings 会静默失败（剪贴板扩展启不了、ding 关不掉）。这里统一修正。
+for d in .config .cache .local .local/share; do
+  install -d -m 0755 "$USER_HOME/$d"
+  chown "$USER_NAME:$USER_NAME" "$USER_HOME/$d"
+done
+
 # 让创建出来的用户能用 sudo（系统镜像里可能连 sudo 都没装，装包阶段补）
 if [ "$CREATED_USER" = 1 ]; then
   install -d -m 0755 /etc/sudoers.d
@@ -141,10 +148,13 @@ install_apt() {
   apt-cache show wl-clipboard >/dev/null 2>&1 && extra="$extra wl-clipboard"
   apt-cache show x11-utils >/dev/null 2>&1 && extra="$extra x11-utils"
   apt-cache show mutter-dev-bin >/dev/null 2>&1 && extra="$extra mutter-dev-bin"
-  say "安装 $desktop（首次会下载 1~3 GB）…"
-  apt-get install -y -o Acquire::Retries=8 $desktop $extra || {
+  # Ubuntu 用 ubuntu-desktop 的完整推荐包；Debian/Kali 用最小集合（不加 recommends，省一大半下载量）
+  local aptflags="-y -o Acquire::Retries=8"
+  apt-cache show ubuntu-desktop >/dev/null 2>&1 || aptflags="$aptflags --no-install-recommends"
+  say "安装 $desktop（首次会下载 0.5~3 GB）…"
+  apt-get install $aptflags $desktop $extra || {
     warn "安装失败，重试一次（--fix-missing）…"
-    apt-get -o Acquire::Retries=8 -y --fix-missing install $desktop $extra
+    apt-get -o Acquire::Retries=8 $aptflags --fix-missing install $desktop $extra
   }
 }
 
@@ -191,6 +201,12 @@ if [ "$SKIP_PACKAGES" = 0 ]; then
 else
   say "跳过软件包安装（--skip-packages）"
 fi
+
+# WSL 里没有物理 seat，gdm 启动只会拉起一个 greeter shell；而 gnome-shell 的 override
+# 会把这个 greeter 也套成 devkit 窗口 → 多出一个假的「Mutter Development Kit」窗口。
+for svc in gdm gdm3 lightdm sddm; do
+  systemctl disable --now "$svc" >/dev/null 2>&1 || true
+done
 
 # 补一个终端（个别最小镜像不装桌面终端）
 if [ -z "$(command -v gnome-terminal || command -v ptyxis || command -v kgx || command -v xterm)" ]; then

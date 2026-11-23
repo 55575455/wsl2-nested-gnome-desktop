@@ -1,6 +1,6 @@
 # WSL2 嵌套 GNOME 桌面 · 故障排除指南（全程复制粘贴）
 
-> 适用：Windows 10/11 + WSL2 + WSLg + **Ubuntu 26.04 / Fedora 45 / Kali 2026 / Oracle Linux 10**
+> 适用：Windows 10/11 + WSL2 + WSLg + **Ubuntu 26.04 / Fedora 45 / Kali 2026 / Oracle Linux 10 / Debian testing**
 > 本指南假设你**不会 Linux，也不想学**——只需要复制命令、粘贴、回车。
 > 开源分享版（公开仓库）
 
@@ -157,6 +157,7 @@ powershell -ExecutionPolicy Bypass -File .\restart-desktop.ps1 -Distro kali-linu
 | Ubuntu 26.04 | `ubuntu-desktop` + `mutter-dev-bin` | devkit（GNOME 50） | `Mutter Development Kit (Ubuntu)` |
 | Fedora 45 | `gnome-shell` + `mutter-devkit` | devkit（GNOME 51） | `Mutter Development Kit (FedoraLinux-45)` |
 | Kali 2026 | 最小 GNOME 集合 + `mutter-dev-bin` | devkit（GNOME 50） | `Mutter Development Kit (kali-linux)` |
+| Debian testing | 最小 GNOME 集合 + `mutter-dev-bin` | devkit（GNOME 51） | `Mutter Development Kit (Debian)` |
 | Oracle Linux 10 | `gnome-shell-47` + `mutter-47`（RHEL 没有 devkit） | **nested**（GNOME 47 的 `--nested`） | `gnome-shell (oracle-linux-10)` |
 
 > Oracle Linux 10 的 WSL 镜像默认**没开 systemd、没有普通用户、没配 AppStream 仓库**。
@@ -556,6 +557,18 @@ id -un                      # 不能是 root（GNOME 不能以 root 运行）
   `wsl --terminate 发行版名`，再重新运行安装脚本；
 - 输出是 `root`：运行 `powershell -ExecutionPolicy Bypass -File .\oneclick\install.ps1 -Distro 发行版名`
   （安装器会创建普通用户 `u`，Oracle Linux 10 就是这样）。
+
+**①.1 任务栏出现第二个 `Mutter Development Kit (发行版)` 窗口（其实是 gdm 登录界面）**
+
+Fedora 等发行版装完桌面后会默认启用 `gdm.service`；WSL 里没有物理 seat，gdm 启动的 greeter
+也会被我们的 gnome-shell override 套成 devkit 窗口，看起来像“多了一个桌面窗口”。
+
+```bash
+systemctl status gdm --no-pager | head -5     # active (running) 就是它
+sudo systemctl disable --now gdm              # 安装器会自动执行这一步
+```
+
+Debian 的 gdm3 同理（`systemctl disable --now gdm3`）。停掉后窗口消失，不影响 `~/start-desktop.sh`。
 
 **② 前台看启动日志**（把真正的报错打出来）：
 

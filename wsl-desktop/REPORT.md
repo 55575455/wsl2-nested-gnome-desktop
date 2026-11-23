@@ -1215,7 +1215,7 @@ Windows→内层 `FINAL-WIN-1`、内层→Windows `FINAL-LIN-2` 均通过。
 | `wsl-desktop/REPORT.md` | 本节 |
 
 
-## 16. 跨发行版移植：Fedora 45 / Kali 2026.3 / Oracle Linux 10（2026-11-22 23:20 – 2026-11-23 00:40 CST）
+## 16. 跨发行版移植：Fedora 45 / Kali 2026.3 / Oracle Linux 10 / Debian testing（2026-11-22 23:20 – 2026-11-24 00:15 CST）
 
 **目标**：原方案只支持 Ubuntu 26.04（GNOME 50 + `mutter-devkit`）。本次把同一套「桌面窗口 + 剪贴板 + 声音 + 一键脚本」移植到
 Fedora 45（GNOME 51）、Kali 2026.3（GNOME 50）、Oracle Linux 10.3（GNOME 47，RHEL 10 系），并保持 Ubuntu 行为不变。
@@ -1228,6 +1228,7 @@ Fedora 45（GNOME 51）、Kali 2026.3（GNOME 50）、Oracle Linux 10.3（GNOME 
 | Fedora 45 | 51.1 | 51.1 | 51.x | ✅ `mutter-devkit` | devkit | `Mutter Development Kit (FedoraLinux-45)` |
 | Kali 2026.3 | 50.5 | 50.5 | 50.x | ✅ `mutter-dev-bin` | devkit | `Mutter Development Kit (kali-linux)` |
 | Oracle Linux 10.3 | 47.8（固定） | 47.5 | 46.0 | ❌ RHEL 没打包 | **nested** | `gnome-shell (oracle-linux-10)` |
+| Debian testing | 51.0 | 51.0 | 51.0 | ✅ `mutter-dev-bin` | devkit | `Mutter Development Kit (Debian)` |
 
 ### 16.2 移植中遇到的关键差异（按发现顺序）
 
@@ -1257,9 +1258,12 @@ Fedora 45（GNOME 51）、Kali 2026.3（GNOME 50）、Oracle Linux 10.3（GNOME 
    Kali 的 `kali-desktop-gnome` 会拖 300+ 包，改用最小 GNOME 集合。
 8. **最小镜像没有 `awk`**（Fedora/OL）：`install-audio.sh` / `install-clipbridge.sh` 里的用户探测改成 POSIX `while read`；
    `wsl-clipbridge.service` 去掉写死的 `/run/user/1000`（systemd 用户单元自带 `XDG_RUNTIME_DIR`）。
-9. **一键脚本重写**：`oneclick/install.ps1` 增加 `-Distro` / `-User` / `-All` / `-SkipPackages`（兼容 `-SkipApt`）/
+9. **Debian 最小镜像的 `~/.config` 属主**：安装脚本用 `install -d` 创建 `~/.config/environment.d`、`~/.config/systemd/user` 时，父目录 `.config` 被建成 `root:root`，用户 `d` 写不进 dconf——所有 `gsettings` 修改静默失败（剪贴板扩展启不了、ding 关不掉、`enabled-extensions` 一直是 `@as []`）。修复：安装器显式 `install -d` + `chown` `.config/.cache/.local`，`start-desktop.sh` 里兜底 `~/.config/dconf`；`gsettings` 空数组的 `@as []` 类型注解也做了兼容解析。
+10. **一键脚本重写**：`oneclick/install.ps1` 增加 `-Distro` / `-User` / `-All` / `-SkipPackages`（兼容 `-SkipApt`）/
    `-NoStart` / `-DryRun`，自动检测 systemd（退出码 3 → `wsl --terminate` 后重试）、自动解析普通用户；
    `start-desktop.ps1` / `fix-audio.ps1` / `restart-desktop.ps1` 也支持 `-Distro`/`-User` 并自动发现发行版。
+10. **Fedora 默认启用的 gdm**：WSL 无 seat，gdm 启动的 greeter shell 会被 `org.gnome.Shell@.service` 的 devkit override 套住，
+   多出一个假的「Mutter Development Kit」窗口。安装器现在会 `systemctl disable --now gdm`（Debian 是 gdm3）。
 
 ### 16.3 验证矩阵（2026-11-22 23:52 – 2026-11-23 00:40）
 
@@ -1269,6 +1273,7 @@ Fedora 45（GNOME 51）、Kali 2026.3（GNOME 50）、Oracle Linux 10.3（GNOME 
 | Fedora 45 | ✅ `Mutter Development Kit (FedoraLinux-45)` | ✅ 计算器在桌面内（无新 Windows 窗口） | ✅ journal `win -> inner (14 chars)` | ✅ Windows 剪贴板收到 `FED-LIN-030700` | ✅ `RDPSink` |
 | Kali 2026.3 | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Oracle Linux 10.3 | ✅ `gnome-shell (oracle-linux-10)` | ✅ 计算器在桌面内 | ✅ 扩展 ACTIVE + `win -> inner` 日志 | ⏳ 仓库没有 `wl-clipboard`，命令行模拟无法复制（扩展 ACTIVE，同一实现已在 Fedora/Ubuntu 双向实测） | ✅ `RDPSink` |
+| Debian testing | ✅ `Mutter Development Kit (Debian)` | ✅ 应用在桌面内 | ✅ `DEB-WIN-001000` | ✅ `DEB-LIN-001000` | ✅ `RDPSink` |
 
 > Kali 验证命令（与 Ubuntu 相同）：`~/start-desktop.sh --check`、`wl-copy`/`wl-paste` 双向。
 > Oracle Linux 10 的 `Mutter Development Kit` 标题不会出现（nested 模式），窗口标题是 `gnome-shell (oracle-linux-10)`，标题会随前台应用变化。
@@ -1285,11 +1290,11 @@ Fedora 45（GNOME 51）、Kali 2026.3（GNOME 50）、Oracle Linux 10.3（GNOME 
 
 | 文件 | 改动 |
 |---|---|
-| `wsl-desktop/install.sh` | 新增：跨发行版安装器（systemd/用户/apt-dnf/包集合/devkit-vs-nested） |
-| `wsl-desktop/audio/install-audio.sh` | devkit 检测、`wayland-1`、无 awk、任意用户 |
+| `wsl-desktop/install.sh` | 新增：跨发行版安装器（systemd/用户/apt-dnf/包集合/devkit-vs-nested/.config 属主修复） |
+| `wsl-desktop/audio/install-audio.sh` | devkit 检测、`wayland-1`、无 awk、任意用户、`.config` 属主修复 |
 | `wsl-desktop/audio/stop-desktop.sh` | 通用 gnome-session target |
-| `wsl-desktop/clipboard/start-desktop.sh` | 模式检测（devkit/nested）、PipeWire、wayland-N、跨发行版文案 |
-| `wsl-desktop/clipboard/install-clipbridge.sh` | 无 awk、任意用户 |
+| `wsl-desktop/clipboard/start-desktop.sh` | 模式检测（devkit/nested）、PipeWire、wayland-N、跨发行版文案、`@as []` 解析、`~/.config/dconf` 兜底 |
+| `wsl-desktop/clipboard/install-clipbridge.sh` | 无 awk、任意用户、`.config` 属主修复 |
 | `wsl-desktop/clipboard/wsl-clipbridge.service` | 去掉写死的 XDG_RUNTIME_DIR |
 | `wsl-desktop/clipboard/extension/metadata.json` | 支持 GNOME 51 |
 | `oneclick/install.ps1` | 重写：-Distro/-User/-All/-SkipPackages/-NoStart/-DryRun，自动 systemd/用户 |

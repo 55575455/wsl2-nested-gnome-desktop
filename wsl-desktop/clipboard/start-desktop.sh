@@ -258,6 +258,9 @@ run_ensure() {
 # 关掉 Dock 的“运行中程序”图标即可（固定收藏的图标不受影响，剪贴板照常工作）。
 ensure_desktop_tweaks() {
   command -v gsettings >/dev/null 2>&1 || return 0
+  # 最小镜像（Debian/Kali 等）里 ~/.config/dconf 可能不存在，dconf 写不进去，
+  # 所有 gsettings 修改都会静默失败（表现：剪贴板扩展启不了、ding 关不掉）。
+  install -d -m 0700 "$HOME/.config/dconf" 2>/dev/null || true
 
   # 1) 桌面图标扩展 ding：嵌套 --no-x11 会话里以 X11Wayland 运行，会反复重建桌面窗口
   #    并弹出「Desktop Icons NG 正在 X11Wayland 下运行」警告（TROUBLESHOOTING 4.7）。
@@ -267,6 +270,9 @@ import ast, subprocess
 def get(key):
     out = subprocess.run(['gsettings', 'get', 'org.gnome.shell', key],
                          capture_output=True, text=True).stdout.strip()
+    # 空数组时 gsettings 输出带类型注解（例如 Debian 上是 "@as []"），先去掉再解析
+    if out.startswith('@'):
+        out = out.split(' ', 1)[1] if ' ' in out else '[]'
     try:
         return ast.literal_eval(out)
     except Exception:
@@ -286,6 +292,9 @@ import ast, subprocess
 def get(key):
     out = subprocess.run(['gsettings', 'get', 'org.gnome.shell', key],
                          capture_output=True, text=True).stdout.strip()
+    # 空数组时 gsettings 输出带类型注解（例如 Debian 上是 "@as []"），先去掉再解析
+    if out.startswith('@'):
+        out = out.split(' ', 1)[1] if ' ' in out else '[]'
     try:
         return ast.literal_eval(out)
     except Exception:

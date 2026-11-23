@@ -127,6 +127,10 @@ systemctl enable wslg-pulse-bind.service >/dev/null 2>&1 || true
 systemctl restart wslg-pulse-bind.service
 
 # 3) 会话环境：让 dbus 激活的应用也能拿到 PULSE_SERVER
+#    注意：install -d 创建父目录 .config 时用的是 root 属主，必须显式 chown，
+#    否则用户写不进 dconf（gsettings 静默失败、剪贴板扩展启不了）。
+install -d -m 0755 "$TARGET_HOME/.config"
+chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config"
 install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config/environment.d"
 printf 'PULSE_SERVER=unix:/mnt/wslg/PulseServer\n' > "$TARGET_HOME/.config/environment.d/pulse.conf"
 chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config/environment.d/pulse.conf"
